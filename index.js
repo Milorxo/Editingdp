@@ -137,6 +137,8 @@ const domElements = {
   fullscreenModalTitle: null,
   fullscreenModalArea: null,
   fullscreenModalCloseButton: null,
+  menuIcon: null,
+  dashboardColumn: null,
 };
 
 function getTodayDateString() {
@@ -1469,6 +1471,8 @@ function initializeApp() {
   domElements.fullscreenModalTitle = document.getElementById('fullscreen-modal-title');
   domElements.fullscreenModalArea = document.getElementById('fullscreen-modal-area');
   domElements.fullscreenModalCloseButton = document.getElementById('fullscreen-modal-close-button');
+  domElements.menuIcon = document.getElementById('menu-icon');
+  domElements.dashboardColumn = document.getElementById('dashboard-column');
 
 
   Object.keys(CATEGORY_DISPLAY_NAMES).forEach(category => {
@@ -1713,9 +1717,29 @@ function initializeApp() {
       domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
   }
 
+    if (domElements.menuIcon && domElements.dashboardColumn) {
+        domElements.menuIcon.addEventListener('click', () => {
+            const isOpen = domElements.dashboardColumn.classList.toggle('open');
+            domElements.menuIcon.setAttribute('aria-expanded', isOpen.toString());
+        });
+
+        // Optional: Close sidebar when clicking outside of it on smaller screens
+        document.addEventListener('click', (e) => {
+            if (domElements.dashboardColumn.classList.contains('open') &&
+                !domElements.dashboardColumn.contains(e.target) &&
+                !domElements.menuIcon.contains(e.target)) {
+                domElements.dashboardColumn.classList.remove('open');
+                domElements.menuIcon.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
-        if (!domElements.historyModal?.classList.contains('hidden')) {
+            if (domElements.dashboardColumn && domElements.dashboardColumn.classList.contains('open')) {
+                domElements.dashboardColumn.classList.remove('open');
+                if (domElements.menuIcon) domElements.menuIcon.setAttribute('aria-expanded', 'false');
+            } else if (!domElements.historyModal?.classList.contains('hidden')) {
             closeHistoryModal();
         } else if (isMonthYearPickerOpen) {
             closeMonthYearPicker();

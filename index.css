@@ -138,6 +138,30 @@ header {
     flex-direction: column;
     align-items: center;
     margin-bottom: 30px; /* Adjusted margin */
+    position: relative; /* Added for menu icon positioning */
+}
+
+#menu-icon {
+    display: none; /* Hidden by default, shown in media query */
+    position: absolute;
+    top: 10px; /* Adjust as needed */
+    left: 10px; /* Adjust as needed */
+    background: none;
+    border: none;
+    color: #00CFE8;
+    cursor: pointer;
+    padding: 5px;
+    z-index: 10; /* Ensure it's above other header elements if necessary */
+}
+
+#menu-icon svg {
+    width: 30px; /* Adjust size as needed */
+    height: 30px;
+    fill: currentColor;
+}
+
+#menu-icon:hover {
+    color: #7FFFD4;
 }
 
 #main-logo {
@@ -1043,7 +1067,30 @@ footer {
 @media (max-width: 1024px) {
     #app-container { height: auto; max-height: none; padding-bottom: 0; }
     #main-content-wrapper { flex-direction: column; padding: 25px 30px 0; }
-    #dashboard-column { flex-basis: auto; padding-right: 0; border-left: none; padding-top: 30px; margin-bottom: 30px; height: auto; overflow-y: visible; }
+    #dashboard-column {
+        flex-basis: auto;
+        padding-right: 0;
+        border-left: none;
+        padding-top: 30px;
+        margin-bottom: 30px;
+        height: auto;
+        overflow-y: visible;
+        /* Styles for hiding/showing sidebar */
+        position: fixed; /* Changed from absolute for better context */
+        top: 0;
+        left: -100%; /* Start off-screen */
+        width: 80%; /* Adjust width as needed */
+        max-width: 350px; /* Maximum width of the sidebar */
+        height: 100%;
+        background-color: #12101A; /* Match app background */
+        z-index: 1001; /* Above other content but below modals if any are higher */
+        transition: left 0.3s ease-in-out;
+        box-shadow: 5px 0 15px rgba(0,0,0,0.2);
+        border-right: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    #dashboard-column.open {
+        left: 0; /* Slide in */
+    }
     #dashboard-column > h2 { margin-top: 0; }
     #left-column { flex-basis: auto; padding-left: 0; border-left: none; border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 30px; overflow-y: visible; }
     main#tab-content { overflow-y: visible; }
@@ -1056,9 +1103,14 @@ footer {
 @media (max-width: 700px) {
     body { padding: 20px 15px; animation-duration: 70s; }
     #main-content-wrapper { padding: 20px 25px 0; }
-    header { margin-bottom: 20px; }
-    header h1 { font-size: 2em; }
-    #main-logo { width: 55px; height: 55px; margin-bottom: 8px; }
+    header { margin-bottom: 20px; text-align: center; /* Ensure h1 is centered when logo is not influencing it as much */}
+    header h1 { font-size: 2em; display: inline-block; /* Allows centering with text-align on parent */ }
+    #menu-icon {
+        display: block; /* Show menu icon */
+        top: 15px; /* Adjust for smaller screens */
+        left: 15px;
+    }
+    #main-logo { width: 55px; height: 55px; margin-bottom: 8px; margin-left: auto; margin-right: auto; /* Center logo */ }
     .tab-button { font-size: 1em; padding: 18px 10px; }
     .tab-button.main-tab-highlight {
         padding: 22px 10px; /* Adjusted for consistency */
