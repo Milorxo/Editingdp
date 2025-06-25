@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -21,7 +20,7 @@
 </head>
 <body>
     <div id="app-container">
-        <div id="app-view-wrapper"> <!-- Wraps main app content -->
+        <div id="app-view-wrapper"> 
             <div id="main-content-wrapper">
                 <div id="left-column">
                     <header>
@@ -38,15 +37,7 @@
                     </nav>
                     <main id="tab-content">
                         <section id="dashboard-content" role="tabpanel" aria-labelledby="dashboard-tab-button">
-                            <aside id="dashboard-column" role="complementary">
-                                <h2>Activity Dashboard</h2>
-                                <div id="dashboard-summaries">
-                                    <!-- Statistics will be populated here by JS -->
-                                </div>
-                                <div class="main-tab-intro">
-                                    <p>Here's an overview of your daily and weekly progress. Select a category in the Daily Productivity to view and manage specific tasks or notes within folders. Reflect on your day below and check past entries in the calendar.</p>
-                                </div>
-                            </aside>
+                            <!-- 1. Calendar Section -->
                             <div id="calendar-container">
                                 <div id="calendar-header">
                                     <button id="calendar-prev-month" class="calendar-nav-button" aria-label="Previous month">&lt;</button>
@@ -60,13 +51,15 @@
                                 </div>
                             </div>
 
+                            <!-- 2. Today's Reflection Section -->
                             <div id="daily-note-container">
                                 <h3>Today's Reflection</h3>
                                 <textarea id="daily-note-input" placeholder="How was your day? Any thoughts or learnings..."></textarea>
                                 <button id="save-note-button">Save Note</button>
                             </div>
-                            
-                            <div id="mobile-progress-location"> <!-- This div is kept for structure, but progress is now always here -->
+
+                            <!-- 3. Progress Section -->
+                            <div id="mobile-progress-location">
                                 <div id="today-progress-container"> 
                                     <h3>Today's Progress</h3>
                                     <div class="progress-bar-container">
@@ -82,14 +75,27 @@
                                     <p id="current-week-points-stat" class="points-stat">0 / 20000 points</p>
                                 </div>
                             </div>
+
+                            <!-- 4. Activity Dashboard Section -->
+                            <aside id="dashboard-column" role="complementary" class="menu-view-content">
+                                <h2>Activity Dashboard</h2>
+                                <footer>
+                                    <h2> </h2>
+                                    
+                                </footer>
+                                <div id="dashboard-summaries">
+                                    <!-- Statistics will be populated here by JS -->
+                                </div>
+                                <div class="main-tab-intro">
+                                    <p>Here's an overview of your daily and weekly progress. Select a category in the Daily Productivity to view and manage specific tasks or notes within folders. Reflect on your day below and check past entries in the calendar.</p>
+                                </div>
+                            </aside>
+                            
                         </section>
                         <!-- Category sections will be dynamically populated by JS. -->
                     </main>
                 </div>
             </div>
-            <footer>
-                <p>&copy; 2025 Daily Productivity Tracker</p>
-            </footer>
         </div>
 
     </div> <!-- End App Container -->
