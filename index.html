@@ -19,6 +19,23 @@
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
+    <button id="hamburger-button" class="hamburger-button" aria-label="Open menu" aria-controls="side-panel-menu" aria-expanded="false">
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+        <span class="hamburger-line"></span>
+    </button>
+
+    <div id="side-panel-menu" class="side-panel-menu" role="navigation" aria-hidden="true">
+        <nav>
+            <ul>
+                <li><button id="menu-main-view" class="side-panel-item">Main</button></li>
+                <li><button id="menu-live-clock" class="side-panel-item">Live Clock</button></li>
+                <li><button id="menu-activity-dashboard" class="side-panel-item">Activity Dashboard</button></li>
+            </ul>
+        </nav>
+    </div>
+    <div id="side-panel-overlay" class="side-panel-overlay hidden"></div>
+
     <div id="app-container">
         <div id="app-view-wrapper"> 
             <div id="main-content-wrapper">
@@ -75,29 +92,39 @@
                                     <p id="current-week-points-stat" class="points-stat">0 / 20000 points</p>
                                 </div>
                             </div>
-
-                            <!-- 4. Activity Dashboard Section -->
-                            <aside id="dashboard-column" role="complementary" class="menu-view-content">
-                                <h2>Activity Dashboard</h2>
-                                <footer>
-                                    <h2> </h2>
-                                    
-                                </footer>
-                                <div id="dashboard-summaries">
-                                    <!-- Statistics will be populated here by JS -->
-                                </div>
-                                <div class="main-tab-intro">
-                                    <p>Here's an overview of your daily and weekly progress. Select a category in the Daily Productivity to view and manage specific tasks or notes within folders. Reflect on your day below and check past entries in the calendar.</p>
-                                </div>
-                            </aside>
                             
                         </section>
                         <!-- Category sections will be dynamically populated by JS. -->
                     </main>
                 </div>
             </div>
-        </div>
 
+            <aside id="dashboard-column" class="hidden" role="complementary">
+                <h2>Activity Dashboard</h2>
+                 <div class="main-tab-intro">
+                    <p>Here's an overview of your daily and weekly productivity. Select a category in the Daily Productivity to view and manage specific tasks or notes within folders. Reflect on your day below and check past entries in the calendar.</p>
+                </div>
+                <div id="dashboard-summaries">
+                    <!-- Statistics will be populated here by JS -->
+                </div>
+            </aside>
+
+            <div id="live-clock-view-wrapper" class="hidden">
+                <button id="live-clock-fullscreen-button" class="icon-button live-clock-fullscreen-button" aria-label="Toggle fullscreen clock" title="Toggle Fullscreen">
+                    <svg class="fullscreen-icon-expand" viewBox="0 0 24 24" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"></path></svg>
+                    <svg class="fullscreen-icon-contract hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"></path></svg>
+                </button>
+                <div id="analog-clock-container">
+                    <canvas id="analog-clock-canvas"></canvas>
+                </div>
+                <div id="live-clock-digital-display-container">
+                    <div id="live-clock-time">00:00:00</div>
+                    <div id="live-clock-period">AM</div>
+                    <div id="live-clock-date">Sunday, January 1, 2023</div>
+                </div>
+            </div>
+
+        </div> <!-- End App View Wrapper -->
     </div> <!-- End App Container -->
 
     <!-- Modals and Templates -->
