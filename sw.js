@@ -1,4 +1,3 @@
-
 const CACHE_NAME = 'daily-productivity-cache-v4'; // Incremented version
 const CORE_ASSETS = [ // Assets that use CacheFirst strategy
   '/',
