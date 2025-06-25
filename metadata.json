@@ -1,7 +1,6 @@
-
 {
-  "name": "Edit Version",
-  "description": "A web app to track daily tasks across various life categories like Health, God, Personal, and Routine. Tasks reset daily and progress is saved in localStorage.",
+  "name": "Daily Productivity Tracker",
+  "description": "A comprehensive application to track daily tasks, reflections, and progress across various categories using a folder system.",
   "requestFramePermissions": [],
   "prompt": ""
 }
