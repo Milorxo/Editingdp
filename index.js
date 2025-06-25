@@ -1,5 +1,4 @@
 
-
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
@@ -65,15 +64,20 @@ let currentContextMenuTargetTab = null; // For category tabs
 let currentContextMenuTargetFolderBox = null; // For folder boxes (the visual square)
 let midnightTimer = null;
 let tempFolderCreationData = null; // { type: 'task' | 'note', categoryId: string }
+// No liveClockInterval needed anymore
 
 
 // DOM Elements
 const domElements = {
-  appViewWrapper: null,
-  mobileProgressLocation: null,
-  mainContentWrapper: null, 
+  // Removed Menu System Elements
+  appViewWrapper: null, // Still used for main view
+  mainContentWrapper: null, // Still used
+  dashboardColumnView: null, // This is the Activity Dashboard, now part of main flow
 
-  // Existing elements
+  // Progress Location (was mobile, now permanent)
+  mobileProgressLocation: null,
+
+  // Existing elements (mostly unchanged, some might be referenced slightly differently if they were inside removed menu)
   tabsContainer: null,
   tabContentsContainer: null, 
   addCategoryButton: null,
@@ -85,7 +89,6 @@ const domElements = {
   ctxRenameFolderButton: null,
   ctxDeleteFolderButton: null,
   
-  dashboardColumnView: null, // This is the #dashboard-column inside #dashboard-content
   dashboardSummariesContainer: null,
   todayProgressFill: null,
   todayPointsStat: null,
@@ -1433,7 +1436,7 @@ function switchTab(categoryIdToActivate) {
         renderCategorySectionContent(activeTabId); 
     } else {
         currentCategoryView = { mode: 'dashboard', categoryId: null, folderId: null };
-        if (domElements.dashboardSummariesContainer) updateDashboardSummaries();
+        updateDashboardSummaries(); // Update dashboard summaries when switching to main tab
     }
 
     if (activeAddTaskForm) { 
@@ -1919,7 +1922,7 @@ function updateCategoryTabIndicators() {
 
 
 function updateAllProgress() {
-  if (domElements.dashboardSummariesContainer) updateDashboardSummaries();
+  if (domElements.dashboardSummariesContainer && activeTabId === 'dashboard') updateDashboardSummaries();
   updateTodaysProgress();
   updateCurrentWeekProgress();
   updateCategoryTabIndicators();
@@ -2088,16 +2091,18 @@ function initializeApp() {
     domElements.folderOptionsContextMenu = document.getElementById('folder-options-context-menu');
     domElements.ctxRenameFolderButton = document.getElementById('ctx-rename-folder');
     domElements.ctxDeleteFolderButton = document.getElementById('ctx-delete-folder');
-    domElements.dashboardColumnView = document.getElementById('dashboard-column'); // This is the one in #dashboard-content
+    domElements.dashboardColumnView = document.getElementById('dashboard-column'); // Activity Dashboard
     domElements.taskEditControlsTemplate = document.getElementById('task-edit-controls-template');
     domElements.dashboardSummariesContainer = document.getElementById('dashboard-summaries');
+    domElements.mobileProgressLocation = document.getElementById('mobile-progress-location');
 
 
     loadAppData();
     renderTabs();
     renderAllCategorySections(); 
-    switchTab('dashboard'); 
+    switchTab('dashboard'); // Default to dashboard
     updateAllProgress();
+    updateLayoutBasedOnScreenSize(); // Initial call
 
     // Event Listeners with null checks
     if (domElements.addCategoryButton) {
@@ -2292,13 +2297,36 @@ function initializeApp() {
             else if (domElements.chooseFolderTypeModal && !domElements.chooseFolderTypeModal.classList.contains('hidden')) closeChooseFolderTypeModal();
             else if (domElements.enterFolderNameModal && !domElements.enterFolderNameModal.classList.contains('hidden')) closeEnterFolderNameModal();
             else if (domElements.monthYearPickerModal && !domElements.monthYearPickerModal.classList.contains('hidden')) closeMonthYearPicker();
+            // No menu to close with Escape anymore
             else if (currentContextMenuTargetTab) hideCategoryContextMenu();
             else if (currentContextMenuTargetFolderBox) hideFolderContextMenu();
         }
     });
+    
+    window.addEventListener('resize', updateLayoutBasedOnScreenSize);
 
     if (domElements.tabsContainer && domElements.tabsContainer.querySelector('.active')) {
         domElements.tabsContainer.querySelector('.active').focus();
+    }
+}
+
+
+// Simplified Layout Update (mainly for padding adjustments if needed, no element moving)
+function updateLayoutBasedOnScreenSize() {
+    // This function is now much simpler. 
+    // It no longer moves progress containers or the activity dashboard.
+    // It could be used for minor responsive CSS adjustments via JS if needed,
+    // but for now, CSS media queries handle most of this.
+    // Example: Adjust padding on main-content-wrapper if header size changes drastically
+    if (!domElements.mainContentWrapper) return;
+
+    const isMobile = window.innerWidth <= 700;
+    if (isMobile) {
+        domElements.mainContentWrapper.style.paddingLeft = '15px';
+        domElements.mainContentWrapper.style.paddingRight = '15px';
+    } else {
+        domElements.mainContentWrapper.style.paddingLeft = '45px';
+        domElements.mainContentWrapper.style.paddingRight = '45px';
     }
 }
 
