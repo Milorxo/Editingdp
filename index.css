@@ -526,17 +526,17 @@ header h1 {
     transition: color 0.3s ease, border-bottom-color 0.3s ease, background-color 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease, border-radius 0.2s ease;
 }
 
-#add-category-button {
+#add-new-item-button { /* Renamed from add-category-button for clarity if it adds more than categories later */
     flex-grow: 0;
     padding: 15px;
     margin-left: 10px;
     border-radius: 8px;
     color: #7FFFD4;
 }
-#add-category-button:hover {
+#add-new-item-button:hover {
     background-color: rgba(127, 255, 212, 0.1);
 }
-#add-category-button svg {
+#add-new-item-button svg {
     width: 22px;
     height: 22px;
 }
@@ -567,29 +567,58 @@ header h1 {
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
 }
-.tab-button.active:not(.main-tab-highlight) {
-    color: #00E5FF;
-    border-bottom-color: #00E5FF;
+
+/* Standard Category Tabs (Non-Main, Non-Special) */
+.tab-button:not(.main-tab-highlight):not(.special-category-tab).active {
+    color: #00E5FF; /* Cyan text for active standard category */
+    border-bottom-color: #00E5FF; /* Cyan border */
     font-weight: 600;
 }
-.tab-button:not(.main-tab-highlight):hover,
-.tab-button:not(.main-tab-highlight).active {
+.tab-button:not(.main-tab-highlight):not(.special-category-tab):hover,
+.tab-button:not(.main-tab-highlight):not(.special-category-tab).active {
     border-top-left-radius: 10px;
     border-top-right-radius: 10px;
     transform: translateY(-3px);
-    color: #DAFBFF;
+    color: #DAFBFF; /* Lighter cyan for text on hover/active */
     z-index: 1;
 }
-.tab-button:not(.main-tab-highlight):hover:not(.active) {
-    background-color: rgba(0, 207, 232, 0.1);
+.tab-button:not(.main-tab-highlight):not(.special-category-tab):hover:not(.active) {
+    background-color: rgba(0, 207, 232, 0.1); /* Cyanish background */
     box-shadow: 0 -2px 10px rgba(0, 207, 232, 0.35), 0 0 12px rgba(170, 70, 255, 0.25);
     border-bottom-color: transparent;
 }
-.tab-button:not(.main-tab-highlight).active {
-    background-color: rgba(0, 207, 232, 0.07);
+.tab-button:not(.main-tab-highlight):not(.special-category-tab).active {
+    background-color: rgba(0, 207, 232, 0.07); /* Slightly more prominent cyan background */
     box-shadow: 0 -1px 7px rgba(0, 207, 232, 0.25), 0 0 8px rgba(170, 70, 255, 0.15);
-    color: #00E5FF;
+    color: #00E5FF; /* Ensure active text color is bright cyan */
 }
+
+/* Special Category Tabs */
+.tab-button.special-category-tab {
+    color: #BE93FD; /* Purple text for special category */
+}
+.tab-button.special-category-tab:hover:not(.active) {
+    color: #D0B7FF; /* Lighter purple text on hover */
+    background-color: rgba(190, 147, 253, 0.1); /* Light purple background */
+    border-bottom-color: transparent;
+    box-shadow: 0 -2px 10px rgba(190, 147, 253, 0.4), 0 0 12px rgba(190, 147, 253, 0.3); /* Purple glow */
+}
+.tab-button.special-category-tab.active {
+    color: #E0D0FF; /* Bright purple text for active */
+    border-bottom-color: #BE93FD; /* Purple border for active */
+    background-color: rgba(190, 147, 253, 0.15); /* Slightly more prominent purple background */
+    font-weight: 600;
+    box-shadow: 0 -1px 7px rgba(190, 147, 253, 0.3), 0 0 8px rgba(190, 147, 253, 0.2); /* Purple glow for active */
+}
+/* Ensure active special tabs also get the translateY effect */
+.tab-button.special-category-tab:hover,
+.tab-button.special-category-tab.active {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+    transform: translateY(-3px);
+    z-index: 1;
+}
+
 
 /* Category Tab Completion Checkmark & Notification Badge */
 .tab-button.category-complete-indicator::before {
@@ -598,6 +627,7 @@ header h1 {
     top: 8px;
     right: 10px;
     font-size: 12px;
+    /* Default color for standard tabs */
     color: #7FFFD4;
     font-weight: bold;
     line-height: 1;
@@ -605,12 +635,17 @@ header h1 {
     padding: 1px 2px;
     text-shadow: 0 0 3px rgba(0,0,0,0.5);
 }
+/* Special category checkmark color */
+.tab-button.special-category-tab.category-complete-indicator::before {
+    color: #D0B7FF; /* Lighter Purple, or a contrasting color like a light lavender */
+}
+
 
 .notification-badge {
     position: absolute;
     top: 6px;
     left: 8px;
-    background-color: #FF6B6B;
+    background-color: #FF6B6B; /* Default red badge */
     color: white;
     border-radius: 50%;
     width: 18px;
@@ -637,6 +672,12 @@ header h1 {
 .tab-button.category-complete-indicator .notification-badge {
     display: none;
 }
+/* Special category notification badge - if a different color is needed */
+/* .tab-button.special-category-tab .notification-badge {
+    background-color: #some_other_color_for_special_badge;
+    color: #text_for_special_badge;
+} */
+
 
 /* Category Tab Context Menu (three dots icon) */
 .tab-options-icon {
@@ -666,13 +707,20 @@ header h1 {
     display: block;
     width: 3.5px;
     height: 3.5px;
-    background-color: #A09CB8;
+    background-color: #A09CB8; /* Default dot color */
     border-radius: 50%;
 }
-.tab-button:hover .tab-options-icon span,
-.tab-button .tab-options-icon.visible span {
+/* Dots color for standard tabs on hover/visible */
+.tab-button:not(.special-category-tab):hover .tab-options-icon span,
+.tab-button:not(.special-category-tab) .tab-options-icon.visible span {
     background-color: #C5C1D6;
 }
+/* Dots color for special tabs on hover/visible */
+.tab-button.special-category-tab:hover .tab-options-icon span,
+.tab-button.special-category-tab .tab-options-icon.visible span {
+    background-color: #E0D0FF; /* Lighter purple for dots */
+}
+
 
 /* Shared Context Menu */
 .context-menu {
@@ -897,8 +945,8 @@ main#tab-content {
 }
 .calendar-day-fill {
     position: absolute; bottom: 0; left: 0; width: 100%; height: 0%;
-    background-color: hsla(185, 75%, 50%, 0.3);
-    transition: height 0.4s ease-out, background-color 0.3s ease;
+    background-color: hsla(185, 75%, 50%, 0.1); /* Default, very subtle fill */
+    transition: height 0.4s ease-out, background-color 0.3s ease, opacity 0.3s ease;
     z-index: 1; border-radius: 0 0 4px 4px;
 }
 .calendar-day-cell:not(.empty):not(.has-history):not(.current-day):not(.calendar-day-past):hover {
@@ -914,8 +962,9 @@ main#tab-content {
 }
 .calendar-day-cell.current-day .calendar-day-number { font-weight: 700; color: #00E5FF; }
 .calendar-day-cell.current-day .calendar-day-fill {
-    background-color: hsl(185, 100%, 45%) !important;
+    /* background-color: hsl(185, 100%, 45%) !important; Dynamically set by JS */
     box-shadow: none;
+    opacity: 1 !important; /* Full opacity for current day fill */
 }
 
 .calendar-day-cell.current-day.high-fill .calendar-day-number {
@@ -924,14 +973,29 @@ main#tab-content {
     z-index: 3;
 }
 
-.calendar-day-cell.has-history:not(.current-day) { border-bottom: 3px dotted rgba(190, 147, 253, 0.7); }
-.calendar-day-cell.has-history:not(.current-day):hover { background-color: rgba(190, 147, 253, 0.1); border-color: rgba(190, 147, 253, 0.4); }
+.calendar-day-cell.has-history:not(.current-day) { 
+    border-bottom: 3px dotted rgba(190, 147, 253, 0.7); 
+}
+.calendar-day-cell.has-history:not(.current-day):hover { 
+    background-color: rgba(190, 147, 253, 0.1); 
+    border-color: rgba(190, 147, 253, 0.4); 
+}
+.calendar-day-cell.has-history:not(.current-day) .calendar-day-fill {
+    opacity: 0.7; /* Past day fills are slightly subdued */
+}
+
 
 .calendar-day-cell.calendar-day-past .calendar-day-fill {
-    background-color: hsla(185, 75%, 50%, 0.7);
+    /* Default fill for past days (no history or 0% completion) */
+    background-color: hsla(185, 75%, 50%, 0.3); 
+    opacity: 0.5; /* Further subdue if no specific history fill */
 }
+.calendar-day-cell.calendar-day-past.has-history .calendar-day-fill {
+    /* Style for past days WITH history is now handled by the dynamic color in JS + opacity: 0.7 from .has-history:not(.current-day) */
+}
+
 .calendar-day-cell.calendar-day-past {
-    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4);
+    box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.2);
 }
 
 .calendar-day-cell.calendar-day-past:hover {
@@ -939,7 +1003,8 @@ main#tab-content {
     background-color: rgba(0, 184, 212, 0.15);
 }
 .calendar-day-cell.calendar-day-past:hover .calendar-day-fill {
-    background-color: hsla(185, 85%, 55%, 0.8);
+    /* background-color: hsla(185, 85%, 55%, 0.8); No override needed, general hover is fine */
+    opacity: 0.9;
 }
 
 
@@ -1818,8 +1883,8 @@ footer {
 
     .tab-button { font-size: 1.05em; padding: 18px 12px; }
     .tab-button.main-tab-highlight { padding: 22px 12px; }
-    #add-category-button { padding: 14px; margin-left: 8px;}
-    #add-category-button svg { width: 20px; height: 20px;}
+    #add-new-item-button { padding: 14px; margin-left: 8px;}
+    #add-new-item-button svg { width: 20px; height: 20px;}
 
 
     .category-section .category-header .category-title-text { font-size: 1.9em; }
@@ -1863,8 +1928,8 @@ footer {
     #main-logo { width: 55px; height: 55px; margin-bottom: 8px; }
     .tab-button { font-size: 1em; padding: 18px 10px; }
     .tab-button.main-tab-highlight { padding: 22px 10px; }
-    #add-category-button { padding: 12px; margin-left: 5px;}
-    #add-category-button svg { width: 18px; height: 18px;}
+    #add-new-item-button { padding: 12px; margin-left: 5px;}
+    #add-new-item-button svg { width: 18px; height: 18px;}
 
     #dashboard-tab-button { margin-right: 10px; }
     .tab-button.category-complete-indicator::before {
@@ -2019,8 +2084,8 @@ footer {
     #main-logo { width: 50px; height: 50px; margin-bottom: 5px; }
     .tab-button { font-size: 0.9em; letter-spacing: 0; padding: 16px 8px; }
     .tab-button.main-tab-highlight { padding: 20px 8px; }
-     #add-category-button { padding: 10px; }
-     #add-category-button svg { width: 16px; height: 16px;}
+     #add-new-item-button { padding: 10px; }
+     #add-new-item-button svg { width: 16px; height: 16px;}
 
 
     #dashboard-tab-button { margin-right: 8px; }
@@ -2142,10 +2207,13 @@ footer {
 }
 
 /* Ensure modal input fields are styled appropriately */
+#choose-category-type-modal .modal-content,
+#enter-category-name-modal .modal-content,
 #choose-folder-type-modal .modal-content,
 #enter-folder-name-modal .modal-content {
     max-width: 400px;
 }
-#enter-folder-name-modal #folder-name-input {
+#enter-folder-name-modal #folder-name-input,
+#enter-category-name-modal #category-name-input {
     margin-bottom: 25px;
 }
