@@ -48,7 +48,7 @@
                     <nav id="tabs">
                         <button id="dashboard-tab-button" class="tab-button active main-tab-highlight" aria-selected="true" role="tab">Main</button>
                         <!-- Category tabs will be dynamically populated by JS -->
-                        <button id="add-category-button" class="tab-button icon-button" aria-label="Add new category" title="Add New Category">
+                        <button id="add-new-item-button" class="tab-button icon-button" aria-label="Add new category" title="Add New Category">
                             <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
                         </button>
                     </nav>
@@ -199,11 +199,35 @@
         </div>
     </div>
 
-    <!-- Folder System Modals -->
-    <div id="choose-folder-type-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-folder-type-title">
+    <!-- Category Creation Modals -->
+    <div id="choose-category-type-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-category-type-title">
         <div class="modal-content">
-            <button id="choose-folder-type-close-button" class="close-button" aria-label="Close">&times;</button>
-            <h3 id="choose-folder-type-title" class="modal-title-text">Choose Folder Type</h3>
+            <button id="choose-category-type-close-button" class="close-button" aria-label="Close">&times;</button>
+            <h3 id="choose-category-type-title" class="modal-title-text">Choose Category Type</h3>
+            <div class="modal-actions-centered">
+                <button id="select-standard-category-button" class="modal-button">Standard Category</button>
+                <button id="select-special-category-button" class="modal-button">Special Category</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="enter-category-name-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="enter-category-name-title">
+        <div class="modal-content">
+            <button id="enter-category-name-close-button" class="close-button" aria-label="Close">&times;</button>
+            <h3 id="enter-category-name-title" class="modal-title-text">Name Your Category</h3>
+            <input type="text" id="category-name-input" class="modal-input" placeholder="Enter category name">
+            <div class="modal-actions-centered">
+                <button id="create-category-button" class="modal-button-primary">Create</button>
+                <button id="cancel-create-category-button" class="modal-button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Folder System Modals -->
+    <div id="choose-folder-type-modal-folder" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-folder-type-title-folder">
+        <div class="modal-content">
+            <button id="choose-folder-type-close-button-folder" class="close-button" aria-label="Close">&times;</button>
+            <h3 id="choose-folder-type-title-folder" class="modal-title-text">Choose Folder Type</h3>
             <div class="modal-actions-centered">
                 <button id="select-task-folder-button" class="modal-button">Task Folder</button>
                 <button id="select-note-folder-button" class="modal-button">Note Folder</button>
