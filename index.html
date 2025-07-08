@@ -48,7 +48,7 @@
                     <nav id="tabs">
                         <button id="dashboard-tab-button" class="tab-button active main-tab-highlight" aria-selected="true" role="tab">Main</button>
                         <!-- Category tabs will be dynamically populated by JS -->
-                        <button id="add-new-item-button" class="tab-button icon-button" aria-label="Add new category" title="Add New Category">
+                        <button id="add-category-button" class="tab-button icon-button" aria-label="Add new category" title="Add New Category">
                             <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
                         </button>
                     </nav>
@@ -199,11 +199,12 @@
         </div>
     </div>
 
-    <!-- Category Creation Modals -->
+    <!-- Category Type Choice Modal -->
     <div id="choose-category-type-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-category-type-title">
         <div class="modal-content">
-            <button id="choose-category-type-close-button" class="close-button" aria-label="Close">&times;</button>
+            <button id="choose-category-type-close-button" class="close-button" aria-label="Close category type choice">&times;</button>
             <h3 id="choose-category-type-title" class="modal-title-text">Choose Category Type</h3>
+            <p class="modal-description">Standard categories contribute to progress tracking. Special categories do not.</p>
             <div class="modal-actions-centered">
                 <button id="select-standard-category-button" class="modal-button">Standard Category</button>
                 <button id="select-special-category-button" class="modal-button">Special Category</button>
@@ -211,23 +212,25 @@
         </div>
     </div>
 
-    <div id="enter-category-name-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="enter-category-name-title">
+    <!-- Name Entry Modal (used for categories, folders, and renaming items) -->
+    <div id="name-entry-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="name-entry-title">
         <div class="modal-content">
-            <button id="enter-category-name-close-button" class="close-button" aria-label="Close">&times;</button>
-            <h3 id="enter-category-name-title" class="modal-title-text">Name Your Category</h3>
-            <input type="text" id="category-name-input" class="modal-input" placeholder="Enter category name">
-            <div class="modal-actions-centered">
-                <button id="create-category-button" class="modal-button-primary">Create</button>
-                <button id="cancel-create-category-button" class="modal-button">Cancel</button>
+            <button id="name-entry-close-button" class="close-button" aria-label="Close name entry">&times;</button>
+            <h3 id="name-entry-title" class="modal-title-text">Name Your Item</h3>
+            <input type="text" id="name-entry-input" class="modal-input" placeholder="Enter name">
+            <div id="name-entry-actions" class="modal-actions-centered">
+                <button id="confirm-name-entry-button" class="modal-button-primary">Confirm</button> <!-- Text will be set by JS -->
+                <button id="cancel-name-entry-button" class="modal-button">Cancel</button>
             </div>
         </div>
     </div>
-
+    
     <!-- Folder System Modals -->
-    <div id="choose-folder-type-modal-folder" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-folder-type-title-folder">
+    <div id="choose-folder-type-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-folder-type-title-text">
         <div class="modal-content">
-            <button id="choose-folder-type-close-button-folder" class="close-button" aria-label="Close">&times;</button>
-            <h3 id="choose-folder-type-title-folder" class="modal-title-text">Choose Folder Type</h3>
+            <button id="choose-folder-type-close-button" class="close-button" aria-label="Close folder type choice">&times;</button>
+            <h3 id="choose-folder-type-title-text" class="modal-title-text">Choose Folder Type</h3>
+            <p class="modal-description">Organize your items into Task Folders for to-do lists or Note Folders for free-form content.</p>
             <div class="modal-actions-centered">
                 <button id="select-task-folder-button" class="modal-button">Task Folder</button>
                 <button id="select-note-folder-button" class="modal-button">Note Folder</button>
@@ -235,57 +238,42 @@
         </div>
     </div>
 
-    <div id="enter-folder-name-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="enter-folder-name-title">
-        <div class="modal-content">
-            <button id="enter-folder-name-close-button" class="close-button" aria-label="Close">&times;</button>
-            <h3 id="enter-folder-name-title" class="modal-title-text">Name Your Folder</h3>
-            <input type="text" id="folder-name-input" class="modal-input" placeholder="Enter folder name">
-            <div class="modal-actions-centered">
-                <button id="create-folder-button" class="modal-button-primary">Create</button>
-                <button id="cancel-create-folder-button" class="modal-button">Cancel</button>
-            </div>
-        </div>
+    <!-- Context Menus -->
+    <div id="category-tab-context-menu" class="context-menu hidden" role="menu">
+        <button id="ctx-rename-category" role="menuitem">Rename Category</button>
+        <button id="ctx-delete-category" role="menuitem">Delete Category</button>
     </div>
 
-
-    <!-- Template for inline task editing -->
-    <div id="task-edit-controls-template" style="display: none;">
-        <input type="text" class="task-edit-input" />
-        <button class="task-edit-save">Save</button>
-        <button class="task-edit-cancel">Cancel</button>
+    <div id="folder-options-context-menu" class="context-menu hidden" role="menu">
+        <button id="ctx-rename-folder" role="menuitem">Rename Folder</button>
+        <button id="ctx-delete-folder" role="menuitem">Delete Folder</button>
     </div>
-    
-    <!-- Template for category section (will be dynamically filled with folder system or folder content) -->
+
+    <!-- Hidden Input for Image Upload -->
+    <input type="file" id="image-upload-input" accept="image/*" class="hidden">
+
+
+    <!-- Templates (Must be outside of main rendered DOM flow initially) -->
     <template id="category-section-template">
-        <section class="category-section" role="tabpanel">
-            <div class="category-header"> <!-- This header might be adjusted or parts shown/hidden based on view -->
+        <section class="category-section hidden" role="tabpanel">
+            <div class="category-header">
                 <h2 class="category-title-text">Category Name</h2>
-                <!-- Category-level controls (like the old edit mode/undo) might be removed or adapted -->
+                <!-- Controls for folder view (e.g., add folder) might go here or be part of folder-system rendering -->
             </div>
             <div class="category-content-area">
-                <!-- This area will be populated with:
-                    1. Folder grid + add folder button (default)
-                    2. Task Folder content (tasks, add task forms, back button, folder-specific controls)
-                    3. Note Folder content (note editor/viewer, back button, folder-specific controls)
-                -->
+                <!-- Folders grid or Task/Note content will be rendered here by JS -->
             </div>
         </section>
     </template>
 
-    <!-- Shared Context Menu for Category Tabs -->
-    <div id="category-tab-context-menu" class="context-menu hidden">
-        <button id="ctx-rename-category">Rename</button>
-        <button id="ctx-delete-category">Delete</button>
-    </div>
-
-    <!-- Shared Context Menu for Folder Boxes -->
-    <div id="folder-options-context-menu" class="context-menu hidden">
-        <button id="ctx-rename-folder">Rename</button>
-        <button id="ctx-delete-folder">Delete</button>
-    </div>
-
-    <input type="file" id="image-upload-input" accept="image/*" style="display: none;">
-
-    <script type="module" src="index.js"></script>
+    <template id="task-edit-controls-template">
+        <div class="task-edit-controls" style="display: none; width: 100%; align-items: center;">
+            <input type="text" class="task-edit-input" aria-label="Edit task text">
+            <button class="task-edit-save" aria-label="Save task edit">Save</button>
+            <button class="task-edit-cancel" aria-label="Cancel task edit">Cancel</button>
+        </div>
+    </template>
+    
+    <script src="index.js" type="module"></script>
 </body>
 </html>
