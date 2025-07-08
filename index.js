@@ -504,7 +504,7 @@ function saveDayToHistory(dateToSave) {
     const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateToSave;
     
     // Calculate progress based ONLY on 'standard' tasks for the historical entry's points and percentage.
-    const { pointsEarned, percentageCompleted, totalStandardTasks } = calculateProgressForDate(dateToSave, true); // true for standardOnly stats
+    const { pointsEarned, percentage, totalStandardTasks } = calculateProgressForDate(dateToSave, true);
     
     const completedTasksHistory = {}; 
     currentCategories.forEach(cat => { // Iterate all categories to save all completed tasks
@@ -530,7 +530,7 @@ function saveDayToHistory(dateToSave) {
         completedTaskStructure: completedTasksHistory, // Includes tasks from ALL categories (standard and special)
         userNote: mainReflection, 
         pointsEarned: pointsEarned, // Based on STANDARD categories
-        percentageCompleted: percentageCompleted, // Based on STANDARD categories
+        percentageCompleted: percentage, // Based on STANDARD categories
         totalTasksOnDate: totalStandardTasks, // Total STANDARD tasks defined on that day for consistent % calc
         dailyTargetPoints: DAILY_TARGET_POINTS // This target is for standard tasks
     };
@@ -1525,7 +1525,7 @@ function renderTabs() {
 
             tabButton.addEventListener('touchmove', handleTabTouchMove);
             tabButton.addEventListener('touchend', handleTabTouchEndOrCancel);
-            tabButton.addEventListener('touchcancel', handleTabTouchEndOrCancel);
+            tabButton.removeEventListener('touchcancel', handleTabTouchEndOrCancel);
 
             longPressTimer = setTimeout(() => {
                 if (touchStartEvent) { 
@@ -1600,6 +1600,7 @@ function calculateProgressForDate(dateString, standardOnlyStats = false) {
   let totalStandardTasksCount = 0; // Always tracks total standard tasks
 
   currentCategories.forEach(category => {
+    const isStandardCategory = category.type === 'standard';
     (foldersByCategoryId[category.id] || []).forEach(folder => {
       if (folder.type === 'task' && folder.content) {
         const tasksInFolder = folder.content.length;
@@ -1610,19 +1611,19 @@ function calculateProgressForDate(dateString, standardOnlyStats = false) {
           }
         });
 
-        if (category.type === 'standard') {
+        if (isStandardCategory) {
             totalStandardTasksCount += tasksInFolder;
-            if (standardOnlyStats) {
+        }
+        
+        // Determine if this category's tasks should be included in the calculation
+        if (standardOnlyStats) {
+            if (isStandardCategory) {
                 totalTasksForCalc += tasksInFolder;
                 completedCount += completedInFolder;
             }
-        }
-        
-        if (!standardOnlyStats) { // If not standardOnly, count all tasks for generic calculation (e.g. for non-progress related tallies)
-            if (category.type !== 'standard') { // Add special tasks if not standardOnly
-                 totalTasksForCalc += tasksInFolder;
-                 completedCount += completedInFolder;
-            }
+        } else { // if not standardOnly, include all tasks
+            totalTasksForCalc += tasksInFolder;
+            completedCount += completedInFolder;
         }
       }
     });
