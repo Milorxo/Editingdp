@@ -206,13 +206,13 @@
             <h3 id="choose-category-type-title" class="modal-title-text">Choose Category Type</h3>
             <p class="modal-description">Standard categories contribute to progress tracking. Special categories do not.</p>
             <div class="modal-actions-centered">
-                <button id="select-standard-category-button" class="modal-button">Standard Category</button>
-                <button id="select-special-category-button" class="modal-button">Special Category</button>
+                <button id="select-standard-category-button" class="modal-button">Standard</button>
+                <button id="select-special-category-button" class="modal-button">Special</button>
             </div>
         </div>
     </div>
 
-    <!-- Name Entry Modal (used for categories, folders, and renaming items) -->
+    <!-- Name Entry Modal (used for categories, folders, tasks, and renaming items) -->
     <div id="name-entry-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="name-entry-title">
         <div class="modal-content">
             <button id="name-entry-close-button" class="close-button" aria-label="Close name entry">&times;</button>
@@ -224,29 +224,57 @@
             </div>
         </div>
     </div>
-    
-    <!-- Folder System Modals -->
-    <div id="choose-folder-type-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="choose-folder-type-title-text">
-        <div class="modal-content">
-            <button id="choose-folder-type-close-button" class="close-button" aria-label="Close folder type choice">&times;</button>
-            <h3 id="choose-folder-type-title-text" class="modal-title-text">Choose Folder Type</h3>
-            <p class="modal-description">Organize your items into Task Folders for to-do lists or Note Folders for free-form content.</p>
-            <div class="modal-actions-centered">
-                <button id="select-task-folder-button" class="modal-button">Task Folder</button>
-                <button id="select-note-folder-button" class="modal-button">Note Folder</button>
+
+    <!-- Note Editor Modal -->
+    <div id="note-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="note-editor-title">
+        <div class="modal-content fullscreen-modal-content-box">
+             <button id="note-editor-close-button" class="close-button" aria-label="Close note editor">&times;</button>
+            <div class="note-editor-header">
+                <h3 id="note-editor-title" class="fullscreen-modal-title-text">Edit Note</h3>
+                <div class="note-editor-controls">
+                    <button id="note-add-image-button" class="icon-button" title="Add Image">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="note-folder-content-wrapper">
+                <div id="note-editor-area" class="note-editor" contenteditable="true"></div>
             </div>
         </div>
     </div>
 
+    <!-- Task List Modal -->
+    <div id="task-list-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="task-list-title">
+        <div class="modal-content fullscreen-modal-content-box">
+            <button id="task-list-close-button" class="close-button" aria-label="Close task list">&times;</button>
+            <div class="task-list-header">
+                <h3 id="task-list-title" class="fullscreen-modal-title-text">Task Checklist</h3>
+                <div class="task-list-controls">
+                    <button id="task-list-reset-button" class="icon-button" title="Reset all tasks for today">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"></path></svg>
+                    </button>
+                    <button id="task-list-edit-button" class="icon-button" title="Edit tasks">
+                        <svg class="edit-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg>
+                        <svg class="done-icon hidden" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="task-list-content-wrapper">
+                <ul id="checklist-items-list" class="checklist-items-list">
+                    <!-- Checklist items will be populated here -->
+                </ul>
+                <form id="add-checklist-item-form" class="add-checklist-item-form hidden">
+                    <input type="text" id="add-checklist-item-input" placeholder="Add a new task to the list...">
+                    <button type="submit" class="modal-button-primary">Add Task</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
     <!-- Context Menus -->
     <div id="category-tab-context-menu" class="context-menu hidden" role="menu">
         <button id="ctx-rename-category" role="menuitem">Rename Category</button>
         <button id="ctx-delete-category" role="menuitem">Delete Category</button>
-    </div>
-
-    <div id="folder-options-context-menu" class="context-menu hidden" role="menu">
-        <button id="ctx-rename-folder" role="menuitem">Rename Folder</button>
-        <button id="ctx-delete-folder" role="menuitem">Delete Folder</button>
     </div>
 
     <!-- Hidden Input for Image Upload -->
@@ -257,21 +285,23 @@
     <template id="category-section-template">
         <section class="category-section hidden" role="tabpanel">
             <div class="category-header">
-                <h2 class="category-title-text">Category Name</h2>
-                <!-- Controls for folder view (e.g., add folder) might go here or be part of folder-system rendering -->
+                <div class="category-header-left">
+                    <div class="category-title-container">
+                        <button class="icon-button category-back-button" aria-label="Go back">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"></path></svg>
+                        </button>
+                        <h2 class="category-title-text">Category Name</h2>
+                    </div>
+                    <div class="breadcrumbs-container"></div>
+                </div>
+                <div class="category-header-right">
+                    <!-- Action buttons will be inserted here by JS -->
+                </div>
             </div>
             <div class="category-content-area">
-                <!-- Folders grid or Task/Note content will be rendered here by JS -->
+                <!-- Items grid will be rendered here by JS -->
             </div>
         </section>
-    </template>
-
-    <template id="task-edit-controls-template">
-        <div class="task-edit-controls" style="display: none; width: 100%; align-items: center;">
-            <input type="text" class="task-edit-input" aria-label="Edit task text">
-            <button class="task-edit-save" aria-label="Save task edit">Save</button>
-            <button class="task-edit-cancel" aria-label="Cancel task edit">Cancel</button>
-        </div>
     </template>
     
     <script src="index.js" type="module"></script>
