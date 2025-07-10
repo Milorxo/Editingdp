@@ -72,36 +72,17 @@ main#tab-content.main-area-scroll-hidden {
     }
 }
 
-/* Task Click Animations - Subtler */
+/* Task Click Animations */
 @keyframes taskAnimatePop {
   0% { transform: scale(1); }
-  50% { transform: scale(1.02); }
+  50% { transform: scale(1.03); }
   100% { transform: scale(1); }
 }
 
-@keyframes checkboxCompleteColorFlash {
-    0%, 100% { color: #7FFFD4; }
-    50% { color: #AFFFFF; }
+.checklist-item.animate-task-toggle {
+    animation: taskAnimatePop 0.3s ease-out;
 }
 
-@keyframes checkboxUncompleteColorFlash {
-    0%, 100% { color: #00CFE8;}
-    50% { color: #60EFFF; }
-}
-
-.task-item.animate-task-complete {
-  animation: taskAnimatePop 0.30s ease-out;
-}
-.task-item.animate-task-complete::before {
-  animation: checkboxCompleteColorFlash 0.30s ease-out;
-}
-
-.task-item.animate-task-uncomplete {
-  animation: taskAnimatePop 0.30s ease-out;
-}
-.task-item.animate-task-uncomplete::before {
-  animation: checkboxUncompleteColorFlash 0.30s ease-out;
-}
 
 /* Animation for points text reset */
 @keyframes quickFadeOutIn {
@@ -114,6 +95,36 @@ main#tab-content.main-area-scroll-hidden {
 .points-stat.progress-value-resetting,
 .progress-bar-fill.progress-value-resetting {
     animation: quickFadeOutIn 0.5s ease-in-out;
+}
+
+
+/* General UI Animations */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+@keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+@keyframes scaleIn {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+@keyframes slideUpIn {
+    from { transform: translateY(15px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.item.entering {
+    animation: fadeIn 0.4s ease-out;
+}
+.item.leaving {
+    animation: fadeOut 0.3s ease-out forwards;
+}
+
+.modal.opening .modal-content {
+    animation: scaleIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 
@@ -232,12 +243,26 @@ header h1 {
 }
 
 .icon-button { /* Base for icon buttons */
-    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease; /* Added transform */
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #C5C1D6;
+    padding: 6px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
 }
 
 .icon-button:hover,
 .icon-button:focus-visible {
+    background-color: rgba(200, 200, 220, 0.15);
     transform: scale(1.05); /* Subtle zoom for feedback */
+}
+.icon-button:active {
+    transform: scale(0.95);
+    transition-duration: 0.1s;
 }
 
 /* Default size for SVGs within icon buttons, can be overridden specifically */
@@ -416,18 +441,38 @@ main#tab-content > section.hidden {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 15px;
     margin-bottom: 20px;
     padding-bottom: 10px;
     border-bottom: 1px solid rgba(190, 147, 253, 0.15);
+}
+.category-header-left {
+    flex-grow: 1;
+    min-width: 0;
+}
+.category-title-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 5px;
+}
+.category-back-button {
+    color: #00CFE8;
+    flex-shrink: 0;
+}
+.category-back-button svg {
+    width: 24px;
+    height: 24px;
 }
 .category-title-text {
     font-size: 1.5em;
     font-weight: 600;
     color: #D0A7FF; /* Light Purple for category titles */
 }
-.category-header-controls {
+.category-header-right {
     display: flex;
     gap: 10px;
+    flex-shrink: 0;
 }
 .category-content-area {
     flex-grow: 1;
@@ -513,6 +558,9 @@ main#tab-content > section.hidden {
     background-color: rgba(190, 147, 253, 0.15);
     color: #D0A7FF;
 }
+#calendar-month-year-button:active {
+    transform: scale(0.97);
+}
 .calendar-nav-button {
     background: none;
     border: none;
@@ -533,6 +581,9 @@ main#tab-content > section.hidden {
     background-color: rgba(190, 147, 253, 0.15);
     color: #D0A7FF;
     transform: scale(1.1);
+}
+.calendar-nav-button:active {
+    transform: scale(1);
 }
 
 #calendar-grid {
@@ -666,7 +717,7 @@ main#tab-content > section.hidden {
     box-shadow: 0 4px 10px rgba(0, 207, 232, 0.3);
 }
 #save-note-button:active {
-    transform: translateY(1px);
+    transform: translateY(1px) scale(0.98);
     background-color: #00B8D4; /* Darker Cyan */
 }
 
@@ -727,9 +778,10 @@ main#tab-content > section.hidden {
     padding: 15px;
     backdrop-filter: blur(5px);
     -webkit-backdrop-filter: blur(5px);
+    animation: fadeIn 0.2s ease-out;
 }
 .modal.hidden {
-    display: none;
+    display: none !important;
 }
 .modal-content {
     background-color: #1C1A2C; /* Dark purple modal background */
@@ -807,6 +859,10 @@ main#tab-content > section.hidden {
     background-color: rgba(190, 147, 253, 0.25);
     color: #D0A7FF;
 }
+.modal-button:active, .modal-button-primary:active {
+    transform: scale(0.97);
+    transition-duration: 0.1s;
+}
 
 .close-button {
     position: absolute;
@@ -820,6 +876,7 @@ main#tab-content > section.hidden {
     padding: 5px;
     line-height: 1;
     transition: color 0.2s ease, transform 0.15s ease;
+    z-index: 10;
 }
 .close-button:hover,
 .close-button:focus-visible {
@@ -849,7 +906,7 @@ main#tab-content > section.hidden {
     border-radius: 6px;
     cursor: pointer;
     font-size: 0.9em;
-    transition: background-color 0.2s, border-color 0.2s;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.1s ease;
 }
 .month-option:hover, .year-option:hover,
 .month-option:focus-visible, .year-option:focus-visible {
@@ -861,6 +918,9 @@ main#tab-content > section.hidden {
     color: #0D0C15; /* Dark text */
     font-weight: 600;
     border-color: #BE93FD;
+}
+.month-option:active, .year-option:active {
+    transform: scale(0.96);
 }
 .picker-years-container {
     max-height: 150px; /* Allow scrolling for years */
@@ -1047,358 +1107,340 @@ main#tab-content > section.hidden {
 .cancel-delete-task-button:focus-visible { background-color: rgba(190, 147, 253, 0.25); }
 
 
-/* Task and Folder Specific Styles (New Folder System) */
-.task-list {
-    list-style: none;
-    padding: 0;
-    margin: 10px 0;
-}
-.task-item {
+/* Breadcrumbs */
+.breadcrumbs-container {
     display: flex;
     align-items: center;
-    padding: 12px 10px;
-    background-color: rgba(30, 26, 48, 0.6); /* Slightly lighter purple background for tasks */
-    border-radius: 8px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: background-color 0.2s ease, transform 0.15s ease;
-    border: 1px solid transparent;
-    position: relative; /* For edit controls */
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-left: 40px; /* Offset for back button */
+    margin-top: -5px; /* Adjust vertical alignment */
 }
-.task-item:hover,
-.task-item:focus-visible { /* Added focus-visible */
-    background-color: rgba(40, 35, 65, 0.8);
-    border-color: rgba(190, 147, 253, 0.15);
-}
-.task-item::before { /* Custom checkbox */
-    content: '';
-    display: inline-block;
-    width: 18px;
-    height: 18px;
-    border: 2px solid #00CFE8; /* Cyan border */
-    border-radius: 4px;
-    margin-right: 12px;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
-}
-.task-item.completed::before {
-    background-color: #7FFFD4; /* Aquamarine fill */
-    border-color: #7FFFD4;
-    content: '✔'; /* Checkmark */
-    color: #0D0C15; /* Dark checkmark for contrast */
-    font-size: 12px;
-    text-align: center;
-    line-height: 16px; /* Adjust for checkmark alignment */
-    font-weight: bold;
-}
-.task-text {
-    flex-grow: 1;
-    color: #C5C1D6;
-    font-size: 0.95em;
-    word-break: break-word; /* Prevent long text from overflowing */
-}
-.task-item.completed .task-text {
-    text-decoration: line-through;
-    color: #827E99; /* Muted color for completed text */
-    opacity: 0.7;
-}
-
-/* Task Edit Mode Styles */
-.task-item.edit-mode-active { /* Class on task-list or task-folder-content */
-   /* Styles for when the folder is in edit mode, if needed for the item itself */
-}
-.task-item.dragging {
-    opacity: 0.5;
-    background: rgba(190, 147, 253, 0.2); /* Purple highlight when dragging */
-}
-.drag-over-indicator-task {
-    border-top: 2px dashed #BE93FD !important; /* Visual cue for drop target */
-}
-.drag-over-indicator-task-bottom {
-    border-bottom: 2px dashed #BE93FD !important;
-}
-.task-delete-button-editmode { /* This is an .icon-button */
+.breadcrumb-part {
     background: none;
     border: none;
-    color: #FF6B6B; /* Red for delete */
-    cursor: pointer;
-    margin-left: 10px;
-    padding: 5px; /* Specific padding if needed, or rely on .icon-button */
-    border-radius: 50%;
-}
-.task-delete-button-editmode:hover, /* Handled by .icon-button:hover */
-.task-delete-button-editmode:focus-visible {
-    background-color: rgba(255, 107, 107, 0.15); /* Keep specific red feedback */
-}
-/* .task-delete-button-editmode svg is handled by .icon-button svg */
-
-
-/* Inline Task Edit Controls */
-#task-edit-controls-template { display: none; } /* Hide template */
-.task-edit-input {
-    flex-grow: 1;
-    padding: 8px;
-    background-color: rgba(10, 8, 18, 0.8);
-    border: 1px solid #BE93FD;
-    border-radius: 6px;
-    color: #C5C1D6;
+    padding: 2px 4px;
     font-size: 0.9em;
-    margin-right: 8px;
+    color: #A09CB8;
 }
-.task-edit-save, .task-edit-cancel {
-    padding: 8px 12px;
-    border: none;
-    border-radius: 6px;
+.breadcrumb-part:not(span) { /* Buttons */
     cursor: pointer;
-    font-size: 0.85em;
-    font-weight: 500;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
 }
-.task-edit-save { background-color: #00CFE8; color: #0D0C15; margin-right: 5px;}
-.task-edit-cancel { background-color: rgba(190, 147, 253, 0.2); color: #BE93FD; }
-
-/* Add Task Forms (Top/Bottom of Task List) */
-.add-task-form-container {
-    padding: 10px 0;
-    margin: 5px 0;
+.breadcrumb-part:not(span):hover,
+.breadcrumb-part:not(span):focus-visible {
+    background-color: rgba(190, 147, 253, 0.1);
+    color: #D0A7FF;
 }
-
-/* Hide Add Item trigger by default, show in edit mode */
-.task-folder-content .add-task-form-container {
-    display: none;
-}
-.task-folder-content.edit-mode-active .add-task-form-container {
-    display: block;
+.breadcrumb-separator {
+    color: #706A88;
+    font-size: 0.8em;
+    margin: 0 2px;
 }
 
-.add-item-trigger-button { /* This is an .icon-button conceptually if not by class */
-    width: 100%;
-    padding: 10px;
-    background-color: rgba(0, 207, 232, 0.1);
-    border: 1px dashed rgba(0, 207, 232, 0.3);
-    color: #00CFE8;
+/* Category Header Controls */
+.view-mode-container, .add-action-container {
+    position: relative;
+}
+.view-mode-options, .add-action-options {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    background-color: #2A263B;
     border-radius: 8px;
-    cursor: pointer;
-    font-size: 0.9em;
+    border: 1px solid rgba(190, 147, 253, 0.2);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    padding: 5px;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    transition: background-color 0.2s, border-color 0.2s, transform 0.15s ease;
+    gap: 5px;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
 }
-.add-item-trigger-button:hover,
-.add-item-trigger-button:focus-visible {
-    background-color: rgba(0, 207, 232, 0.15);
-    border-color: rgba(0, 207, 232, 0.5);
-    transform: scale(1.01); /* Slight grow for full-width button */
+.view-mode-container.open .view-mode-options,
+.add-action-container.open .add-action-options {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
 }
-.add-item-trigger-button svg { /* Handled by .icon-button svg (22px) */
-     /* width: 18px; height: 18px; */ /* Old size */
+.view-mode-options .icon-button.active {
+    background-color: rgba(0, 207, 232, 0.2);
+    color: #33DFFF;
+}
+.add-action-button, .view-mode-button {
+    color: #00CFE8;
 }
 
-.new-temp-task-form {
-    display: flex;
-    gap: 8px;
-    align-items: center;
+/* Unified Item Grid & Views */
+.items-grid {
+    display: grid;
+    gap: 20px;
+    transition: grid-template-columns 0.4s ease-in-out;
 }
-.new-task-temp-input {
-    flex-grow: 1;
-    padding: 10px;
-    background-color: rgba(10, 8, 18, 0.85);
-    border: 1px solid rgba(190, 147, 253, 0.3);
-    border-radius: 6px;
+.item {
+    background-color: rgba(30, 26, 48, 0.6);
+    border-radius: 12px;
+    border: 1px solid transparent;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    overflow: hidden;
+    user-select: none; /* Prevent text selection during drag */
+}
+.item:hover, .item:focus-within {
+    background-color: rgba(40, 35, 65, 0.8);
+    border-color: rgba(190, 147, 253, 0.2);
+    transform: translateY(-2px);
+}
+.item.drag-over {
+    border-color: #00CFE8;
+    box-shadow: 0 0 10px rgba(0, 207, 232, 0.4);
+}
+.item-icon {
+    flex-shrink: 0;
+}
+.item-name {
     color: #C5C1D6;
+    word-break: break-word;
+}
+.item-actions {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+    gap: 5px;
+    background-color: rgba(30, 26, 48, 0.9);
+    padding: 4px;
+    border-radius: 8px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+.item:hover .item-actions, .item:focus-within .item-actions {
+    opacity: 1;
+}
+.item-actions .icon-button {
+    padding: 4px;
+}
+.item-actions .icon-button.item-rename { color: #00CFE8; }
+.item-actions .icon-button.item-delete { color: #FF6B6B; }
+
+/* View Mode: Medium (Default) */
+.view-mode-medium {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+.view-mode-medium .item {
+    flex-direction: column;
+    align-items: center;
+    padding: 15px;
+    text-align: center;
+}
+.view-mode-medium .item-icon svg {
+    width: 40px;
+    height: 40px;
+}
+.view-mode-medium .item-name {
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+.view-mode-medium .item-details {
+    font-size: 0.8em;
+    margin-top: 5px;
+    color: #A09CB8;
+}
+
+/* View Mode: Large */
+.view-mode-large {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+}
+.view-mode-large .item {
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+    text-align: center;
+}
+.view-mode-large .item-icon svg {
+    width: 50px;
+    height: 50px;
+}
+.view-mode-large .item-name {
+    font-size: 1em;
+    margin-top: 12px;
+}
+.view-mode-large .item-details {
+    font-size: 0.85em;
+    margin-top: 6px;
+    color: #A09CB8;
+}
+
+/* View Mode: Detail */
+.view-mode-detail {
+    grid-template-columns: 1fr;
+    gap: 8px;
+}
+.view-mode-detail .item {
+    flex-direction: row;
+    align-items: center;
+    padding: 12px;
+    border-radius: 8px;
+}
+.view-mode-detail .item-icon {
+    margin-right: 12px;
+}
+.view-mode-detail .item-icon svg {
+    width: 24px;
+    height: 24px;
+}
+.view-mode-detail .item-name {
+    flex-grow: 1;
     font-size: 0.95em;
 }
-.new-task-temp-save, .new-task-temp-cancel {
-    padding: 10px 15px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
-    font-size: 0.9em;
+.view-mode-detail .item-details {
+    font-size: 0.8em;
+    color: #A09CB8;
+    margin-left: 15px;
 }
-.new-task-temp-save { background-color: #00CFE8; color: #0D0C15; }
-.new-task-temp-cancel { background-color: rgba(190, 147, 253, 0.2); color: #BE93FD; }
+.view-mode-detail .item .item-actions {
+    position: static;
+    opacity: 1;
+    background: none;
+    padding: 0;
+    margin-left: 10px;
+}
+/* Hide on-hover actions in detail view */
+.view-mode-detail .item .item-rename,
+.view-mode-detail .item .item-delete {
+    display: none;
+}
+/* Show more options button in detail view */
+.item-more-options {
+    color: #A09CB8;
+}
+.item-more-options:hover {
+    color: #E0E0FF;
+}
+
+/* Item Options Popover for Detail View */
+.item-options-popover {
+    display: flex;
+    flex-direction: column;
+    padding: 5px;
+    min-width: 120px;
+    animation: scaleIn 0.15s ease-out;
+}
+.item-options-popover button {
+    padding: 8px 12px;
+}
+.item-options-popover button:hover {
+    background-color: rgba(190, 147, 253, 0.15);
+}
+
+
+/* Item Type Specifics */
+.item.type-folder .item-icon { color: #BE93FD; }
+.item.type-note .item-icon { color: #FFD700; }
+.item.type-task .item-icon { color: #00CFE8; }
+.item.type-task.completed .item-icon { color: #7FFFD4; }
+.item.type-task.completed .item-name,
+.item.type-task.completed .item-details {
+    text-decoration: line-through;
+    color: #827E99;
+}
+
 
 .empty-tasks-message {
     text-align: center;
     color: #A09CB8;
-    padding: 20px;
+    padding: 40px 20px;
     font-style: italic;
     font-size: 0.9em;
-}
-.empty-tasks-message.edit-mode-empty {
-    /* Different message style if needed for edit mode */
+    grid-column: 1 / -1;
 }
 
 
-/* Folder Grid System */
-.folders-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); /* Responsive grid */
-    gap: 20px;
-    padding: 10px;
-}
-.folder-item-container {
+/* Note Editor Modal & Content */
+.note-editor-header {
     display: flex;
-    flex-direction: column;
+    justify-content: flex-end; /* Align items to the end */
     align-items: center;
-    cursor: pointer;
-    padding: 10px;
-    border-radius: 10px;
-    transition: background-color 0.2s ease;
-    position: relative; /* For options trigger positioning */
-}
-.folder-item-container:hover,
-.folder-item-container:focus-visible {
-    background-color: rgba(190, 147, 253, 0.08);
-}
-.folder-box {
-    width: 80px;
-    height: 80px;
-    background-color: rgba(45, 40, 70, 0.8); /* Darker purple for folder icon box */
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(190, 147, 253, 0.2);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    position: relative; /* For options icon */
-}
-.folder-item-container:hover .folder-box,
-.folder-item-container:focus-visible .folder-box {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 12px rgba(190, 147, 253, 0.15);
-}
-.folder-box-icon svg {
-    width: 36px;
-    height: 36px;
-    color: #00CFE8; /* UPDATED: All folder icons to cyan */
-}
-.folder-box-name {
-    margin-top: 8px;
-    font-size: 0.85em;
-    color: #C5C1D6;
-    text-align: center;
-    font-weight: 500;
-    word-break: break-word;
-    max-width: 100px; /* Prevent overly long names from breaking layout */
-}
-.add-folder-button { /* This is an .icon-button */
-    width: 80px; /* Match folder-box size */
-    height: 80px;
-    background-color: transparent;
-    border: 2px dashed rgba(0, 207, 232, 0.4); /* Cyan dashed border */
-    border-radius: 12px;
-    color: #00CFE8; /* Cyan icon */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease; /* Ensure transform is included */
-    margin: auto; /* Center in grid cell if it's the only item / takes full cell space */
-}
-.add-folder-button:hover,
-.add-folder-button:focus-visible {
-    background-color: rgba(0, 207, 232, 0.1);
-    border-color: rgba(0, 207, 232, 0.6);
-    transform: scale(1.05); /* Added for consistency */
-}
-.add-folder-button svg { width: 30px; height: 30px; } /* Kept larger size */
-
-
-/* Folder View Header (Back Button, Title, Controls) */
-.folder-view-header {
-    display: flex;
-    align-items: center;
-    margin-bottom: 20px;
-    padding-bottom: 15px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
     border-bottom: 1px solid rgba(190, 147, 253, 0.1);
 }
-.folder-back-button { /* This is an .icon-button */
-    color: #00CFE8; /* UPDATED: Cyan */
-    background-color: transparent; /* UPDATED: No default background */
-    margin-right: 15px;
-    padding: 8px;
-}
-.folder-back-button:hover, 
-.folder-back-button:focus-visible {
-    background-color: transparent; /* UPDATED: No background highlight */
-    color: #33DFFF; /* Lighter cyan on hover */
-}
-.folder-view-title {
+#note-editor-modal .fullscreen-modal-title-text {
+    margin-bottom: 0;
     flex-grow: 1;
-    font-size: 1.3em;
-    color: #D0A7FF; /* Light purple for folder title */
-    font-weight: 600;
+    text-align: left; /* Align title to the left */
 }
-.folder-view-header-controls {
+.note-editor-controls {
+    flex-shrink: 0;
+    margin-left: 15px;
+}
+.note-editor-controls .icon-button {
+    color: #00CFE8;
+}
+
+#note-editor-modal .note-folder-content-wrapper {
+    flex-grow: 1;
     display: flex;
-    gap: 8px;
-}
-.folder-view-header-controls .icon-button { /* Base styles from .icon-button */
-    color: #00CFE8; /* UPDATED: Cyan for Edit/Undo/Add Image */
-    padding: 8px; 
-}
-.folder-view-header-controls .icon-button:hover, 
-.folder-view-header-controls .icon-button:focus-visible {
-    background-color: transparent; /* UPDATED: No background highlight */
-    color: #33DFFF; /* Lighter cyan */
-}
-.folder-view-header-controls .icon-button.active-glow {
-    color: #00CFE8; /* Cyan when active, e.g., edit mode */
-    box-shadow: 0 0 8px rgba(0, 207, 232, 0.4);
-}
-/* SVGs within .folder-view-header-controls .icon-button are handled by .icon-button svg */
-
-.task-folder-content.edit-mode-active .task-item {
-    cursor: grab; /* Indicate draggable */
-}
-.task-folder-content.edit-mode-active .task-item::before {
-    display: none; /* Hide checkbox in edit mode */
-}
-.task-folder-content.edit-mode-active .task-text {
-    margin-left: 0; /* Adjust text position if checkbox is hidden */
-}
-.task-folder-content.edit-mode-active .task-item.completed .task-text {
-    text-decoration: none; /* No strikethrough in edit mode */
-    color: #C5C1D6;
-    opacity: 1;
-}
-
-/* Note Folder Specific Styles */
-.note-folder-content-wrapper {
-    flex-grow: 1; /* Allow editor to fill space */
-    display: flex; /* For potential future layout changes */
     flex-direction: column;
+    overflow: hidden;
 }
-.note-editor {
+#note-editor-area {
     flex-grow: 1;
-    min-height: 300px; /* Minimum height for note editor */
+    min-height: 300px;
     padding: 15px;
-    background-color: rgba(18, 16, 28, 0.95); /* Very dark background */
+    background-color: rgba(18, 16, 28, 0.95);
     border: 1px solid rgba(190, 147, 253, 0.25);
     border-radius: 8px;
     color: #C5C1D6;
     font-size: 1em;
     line-height: 1.7;
     outline: none;
-    overflow-y: auto; /* Scroll content within editor */
+    overflow-y: auto;
 }
 .note-editor:focus {
     border-color: #BE93FD;
     box-shadow: 0 0 0 3px rgba(190, 147, 253, 0.15);
 }
+.note-editor .note-image-wrapper {
+    position: relative;
+    display: inline-block;
+    max-width: 90%;
+    margin: 10px 5%;
+}
 .note-editor img {
     max-width: 100%;
     height: auto;
     border-radius: 6px;
-    margin: 10px 0;
     border: 1px solid rgba(190, 147, 253, 0.2);
 }
+.note-editor .note-image-delete {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: rgba(0,0,0,0.6);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 24px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+.note-editor .note-image-wrapper:hover .note-image-delete {
+    opacity: 1;
+}
+
 .note-editor a {
-    color: #00CFE8; /* Cyan for links */
+    color: #00CFE8;
     text-decoration: none;
     border-bottom: 1px dotted rgba(0, 207, 232, 0.5);
 }
@@ -1406,9 +1448,116 @@ main#tab-content > section.hidden {
     color: #33DFFF;
     border-bottom-color: rgba(0, 207, 232, 0.8);
 }
-.note-folder-controls .add-image-button { /* This is an .icon-button */
-    /* Specific styling if needed, otherwise inherits from .folder-view-header-controls .icon-button */
+
+/* Task List Modal */
+.task-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(190, 147, 253, 0.1);
 }
+.task-list-header .fullscreen-modal-title-text {
+    margin-bottom: 0;
+    flex-grow: 1;
+}
+.task-list-controls {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: 15px;
+}
+.task-list-controls .icon-button {
+    color: #00CFE8;
+}
+.task-list-content-wrapper {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.checklist-items-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex-grow: 1;
+    overflow-y: auto;
+    padding-right: 5px; /* space for scrollbar */
+}
+.checklist-item {
+    display: flex;
+    align-items: center;
+    padding: 12px 5px;
+    border-bottom: 1px solid rgba(190, 147, 253, 0.1);
+    transition: background-color 0.2s;
+    cursor: pointer;
+}
+.checklist-item:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}
+.checklist-item.completed .checklist-item-text {
+    text-decoration: line-through;
+    color: #827E99;
+}
+.checklist-item-checkbox {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+    flex-shrink: 0;
+    pointer-events: none; /* Let the row click handle it */
+}
+.checklist-items-list.edit-mode .checklist-item {
+    cursor: default;
+}
+.checklist-item-checkbox:disabled {
+    cursor: not-allowed;
+}
+.checklist-item-text {
+    flex-grow: 1;
+    color: #C5C1D6;
+    font-size: 0.95em;
+}
+.checklist-item-actions {
+    display: none; /* Hidden by default */
+    gap: 8px;
+    margin-left: 10px;
+}
+.checklist-items-list.edit-mode .checklist-item-actions {
+    display: flex; /* Show in edit mode */
+}
+
+.checklist-item-actions .icon-button {
+    padding: 4px;
+    color: #A09CB8;
+    cursor: pointer;
+}
+.checklist-item-actions .icon-button:hover.checklist-item-rename { color: #00CFE8; }
+.checklist-item-actions .icon-button:hover.checklist-item-delete { color: #FF6B6B; }
+
+.add-checklist-item-form {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(190, 147, 253, 0.15);
+    transition: opacity 0.3s, transform 0.3s;
+}
+.add-checklist-item-form.hidden {
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+}
+#add-checklist-item-input {
+    flex-grow: 1;
+    background-color: rgba(10, 8, 18, 0.9);
+    border: 1px solid rgba(190, 147, 253, 0.3);
+    color: #C5C1D6;
+    padding: 10px;
+    border-radius: 8px;
+    outline: none;
+}
+
 
 /* Context Menu Styling */
 .context-menu {
@@ -1443,39 +1592,6 @@ main#tab-content > section.hidden {
     color: #706A88; /* Muted color for disabled items */
     cursor: not-allowed;
     background-color: transparent;
-}
-.folder-options-trigger {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    width: 20px; 
-    height: 20px; 
-    display: flex;
-    flex-direction: column;
-    justify-content: space-around;
-    align-items: center;
-    padding: 3px; 
-    border-radius: 4px;
-    cursor: pointer;
-    opacity: 0; /* Hidden by default on folder box */
-    transition: opacity 0.2s ease, background-color 0.2s ease;
-}
-.folder-item-container:hover .folder-options-trigger,
-.folder-options-trigger:focus, /* Show on focus for accessibility */
-.folder-options-trigger.visible { /* For touch interaction if needed */
-    opacity: 1;
-}
-.folder-options-trigger:hover,
-.folder-options-trigger:focus-visible {
-    background-color: rgba(200, 200, 220, 0.15);
-}
-.folder-options-trigger span {
-    display: block;
-    width: 3.5px; 
-    height: 3.5px; 
-    background-color: #C5C1D6; 
-    border-radius: 50%;
-    margin: 1.2px auto; 
 }
 
 
@@ -1687,8 +1803,8 @@ main#tab-content > section.hidden {
 .live-clock-fullscreen-button { /* This is an .icon-button */
     position: absolute;
     top: 20px;
-    left: 20px;
-    color: #00CFE8; /* UPDATED: Cyan */
+    right: 20px;
+    color: #00CFE8;
     background-color: rgba(30, 26, 48, 0.7);
     border-radius: 50%;
     padding: 10px;
@@ -1713,7 +1829,7 @@ main#tab-content > section.hidden {
     height: clamp(300px, 80vmin, 600px);
 }
 #live-clock-view-wrapper.fullscreen-active .live-clock-fullscreen-button {
-    top: 30px; left: 30px; /* Adjust position */
+    top: 30px; right: 30px; /* Adjust position */
 }
 #live-clock-view-wrapper.fullscreen-active #live-clock-digital-display-container.digital-hidden {
     opacity: 0;
@@ -1742,18 +1858,15 @@ main#tab-content > section.hidden {
     #main-logo { width: 35px; height: 35px; }
     .tab-button { font-size: 0.85em; padding: 8px 12px; }
     .category-title-text { font-size: 1.3em; }
-    .folder-view-title { font-size: 1.2em; }
 
     .modal-content { width: 95%; padding: 20px; }
     .modal-title-text { font-size: 1.2em; }
     
-    .folders-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px; }
-    .folder-box { width: 70px; height: 70px; }
-    .folder-box-icon svg { width: 30px; height: 30px; } 
-    .add-folder-button { width: 70px; height: 70px; }
-    .add-folder-button svg { width: 26px; height: 26px; } 
+    .view-mode-medium { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+    .view-mode-large { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 
     #live-clock-view-wrapper { padding: 10px; }
+    .live-clock-fullscreen-button { top: 15px; right: 15px; }
 }
 
 @media (max-width: 480px) {
@@ -1772,6 +1885,9 @@ main#tab-content > section.hidden {
     .modal-button, .modal-button-primary { width: 100%; }
 
     .picker-months-container { grid-template-columns: repeat(3, 1fr); }
+
+    .view-mode-medium { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+    .view-mode-large { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 }
 
 /* Ensure progress containers take full width for mobile view if they were previously in a column */
