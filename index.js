@@ -36,6 +36,7 @@ const STORAGE_KEY_CURRENT_WEEK_START_DATE = 'lifeTrackerCurrentWeekStartDate';
 const USER_CATEGORIES_KEY = 'lifeTrackerUserCategories_v2'; 
 const APP_CONTENT_KEY = 'lifeTrackerAppContent_v1'; // Hierarchical content structure
 const CHECKLIST_ITEM_STATE_KEY_PREFIX = 'lifeTrackerChecklistState_';
+const STORAGE_KEY_VIEW_MODE = 'lifeTrackerViewMode';
 
 let currentCategories = []; 
 let appContent = {}; // Main data structure for all items (folders, notes, tasks)
@@ -57,8 +58,8 @@ let currentContextMenuTargetTab = null;
 let itemContextMenu = { element: null, target: null };
 let midnightTimer = null;
 let tempItemCreationData = null;
-let liveClockInterval = null;
-let analogClockInterval = null; 
+let liveClockAnimationId = null;
+let lastClockUpdateTime = 0;
 let currentActiveViewId = 'main'; // 'main', 'live-clock', 'activity-dashboard'
 let isLiveClockFullscreen = false;
 let currentlyEditingNote = null; // { id, name, content }
@@ -235,7 +236,7 @@ function updateTodaysHistoryEntry() {
     
     const completedTasksTodayStruct = {}; 
     currentCategories.forEach(cat => {
-      if (!appContent[cat.id] || cat.type === 'special') return;
+      if (!appContent[cat.id]) return; // Just check if content exists
       
       const taskLists = getAllTaskListFiles(appContent[cat.id]);
       const completedTasksForCat = [];
@@ -247,7 +248,11 @@ function updateTodaysHistoryEntry() {
       });
 
       if (completedTasksForCat.length > 0) {
-        completedTasksTodayStruct[cat.id] = { name: cat.name, tasks: completedTasksForCat };
+        completedTasksTodayStruct[cat.id] = { 
+            name: cat.name, 
+            tasks: completedTasksForCat, 
+            type: cat.type // Pass type to history object
+        };
       }
     });
 
@@ -516,17 +521,19 @@ function saveDayToHistory(dateToSave) {
     
     const completedTasksHistory = {}; 
     currentCategories.forEach(cat => {
-      if (!appContent[cat.id] || cat.type === 'special') return;
+      if (!appContent[cat.id]) return; // Only check for content existence
+
       const taskLists = getAllTaskListFiles(appContent[cat.id]);
+      const completedTasksForCat = [];
       taskLists.forEach(taskList => {
         const completedChecklistItems = (taskList.content || []).filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(dateToSave, ci.id)) === 'true');
         if(completedChecklistItems.length > 0) {
-            if (!completedTasksHistory[cat.id]) {
-                completedTasksHistory[cat.id] = { name: cat.name, tasks: [] };
-            }
-            completedTasksHistory[cat.id].tasks.push(...completedChecklistItems.map(ci => ci.text));
+            completedTasksForCat.push(...completedChecklistItems.map(ci => ci.text));
         }
       });
+      if(completedTasksForCat.length > 0) {
+          completedTasksHistory[cat.id] = { name: cat.name, tasks: completedTasksForCat, type: cat.type };
+      }
     });
 
     const mainReflection = localStorage.getItem(STORAGE_KEY_DAILY_NOTE_PREFIX + dateToSave) || "";
@@ -547,7 +554,7 @@ function saveDayToHistory(dateToSave) {
         if (!appContent[cat.id]) return;
         getAllTaskListFiles(appContent[cat.id]).forEach(taskList => {
             (taskList.content || []).forEach(checklistItem => {
-                localStorage.removeItem(getChecklistItemStateStorageKey(dateToSave, checklistItem.id));
+                localStorage.removeItem(getChecklistItemStateStorageKey(dateToSave, checklistItemId));
             });
         });
     });
@@ -569,6 +576,11 @@ function checkAndClearOldMonthlyData() {
 
 function loadAppData() {
   seedInitialDataIfNeeded(); 
+  
+  const savedViewMode = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
+  if (savedViewMode && ['large', 'medium', 'detail'].includes(savedViewMode)) {
+      currentViewMode = savedViewMode;
+  }
 
   let lastVisitDateStr = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE);
   const currentDateStr = getTodayDateString();
@@ -663,7 +675,7 @@ function confirmDeletion() {
         if (itemEl) {
             itemEl.classList.add('leaving');
             itemEl.addEventListener('animationend', () => {
-                renderCategorySectionContent(currentPath[0].id);
+                itemEl.remove();
             });
         } else {
              renderCategorySectionContent(currentPath[0].id);
@@ -789,6 +801,7 @@ function renderCategoryHeaderControls(container) {
     viewOptions.querySelectorAll('button').forEach(btn => {
         btn.onclick = () => {
             currentViewMode = btn.dataset.view;
+            localStorage.setItem(STORAGE_KEY_VIEW_MODE, currentViewMode);
             renderCategorySectionContent(currentPath[0].id);
         };
     });
@@ -807,7 +820,7 @@ function renderCategoryHeaderControls(container) {
     const addOptions = document.createElement('div');
     addOptions.className = 'add-action-options';
     addOptions.innerHTML = `
-        <button class="icon-button" data-type="folder" title="Add Folder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8c0-1.11-.9-2-2-2h-8l-2-2z"></path></svg></button>
+        <button class="icon-button" data-type="folder" title="Add Folder"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12a2 2 0 002 2h16a2 2 0 002 2V8c0-1.11-.9-2-2-2h-8l-2-2z"></path></svg></button>
         <button class="icon-button" data-type="note" title="Add Note File"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"></path></svg></button>
         <button class="icon-button" data-type="tasklist" title="Add Task List"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM9.17 16.17L6 13l1.41-1.41L9.17 13.34l3.42-3.41L14 11.34l-4.83 4.83z"></path></svg></button>
     `;
@@ -858,7 +871,7 @@ function renderItem(item) {
     const iconDiv = document.createElement('div');
     iconDiv.className = 'item-icon';
     if (item.type === 'folder') {
-        iconDiv.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12a2 2 0 002 2h16a2 2 0 002-2V8c0-1.11-.9-2-2-2h-8l-2-2z"></path></svg>`;
+        iconDiv.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.11 0-2 .89-2 2v12a2 2 0 002 2h16a2 2 0 002 2V8c0-1.11-.9-2-2-2h-8l-2-2z"></path></svg>`;
     } else if (item.type === 'note') {
         iconDiv.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"></path></svg>`;
     } else if (item.type === 'tasklist') {
@@ -968,35 +981,83 @@ function handleAddImageToNote() {
     domElements.imageUploadInput.click();
 }
 
-function insertImageIntoNote(file) {
+function processAndInsertImage(file) {
+    if (!file.type.startsWith('image/')) return;
+
+    const MAX_WIDTH = 800;
+    const MAX_HEIGHT = 800;
     const reader = new FileReader();
-    reader.onload = function(e) {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'note-image-wrapper';
-        wrapper.contentEditable = 'false';
 
-        const img = document.createElement('img');
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+            } else {
+                if (height > MAX_HEIGHT) {
+                    width *= MAX_HEIGHT / height;
+                    height = MAX_HEIGHT;
+                }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'note-image-wrapper';
+            wrapper.contentEditable = 'false';
+
+            const imageEl = document.createElement('img');
+            imageEl.src = dataUrl;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'note-image-delete';
+            deleteBtn.innerHTML = '&times;';
+            deleteBtn.onclick = () => wrapper.remove();
+
+            wrapper.appendChild(imageEl);
+            wrapper.appendChild(deleteBtn);
+
+            domElements.noteEditorArea.focus();
+            const selection = window.getSelection();
+            if (selection.getRangeAt && selection.rangeCount) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(wrapper);
+            } else {
+                 domElements.noteEditorArea.appendChild(wrapper);
+            }
+        };
         img.src = e.target.result;
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'note-image-delete';
-        deleteBtn.innerHTML = '&times;';
-        deleteBtn.onclick = () => wrapper.remove();
-
-        wrapper.appendChild(img);
-        wrapper.appendChild(deleteBtn);
-
-        domElements.noteEditorArea.focus();
-        const selection = window.getSelection();
-        if (selection.getRangeAt && selection.rangeCount) {
-            const range = selection.getRangeAt(0);
-            range.deleteContents();
-            range.insertNode(wrapper);
-        } else {
-             domElements.noteEditorArea.appendChild(wrapper);
-        }
     };
     reader.readAsDataURL(file);
+}
+
+function updateTasklistItemView(item) {
+    const itemEl = document.querySelector(`.item[data-item-id="${item.id}"]`);
+    if (!itemEl) return;
+
+    const detailsSpan = itemEl.querySelector('.item-details');
+    if (detailsSpan && item.type === 'tasklist') {
+        const today = getTodayDateString();
+        const checklistItems = item.content || [];
+        const completed = checklistItems.filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(today, ci.id)) === 'true').length;
+        detailsSpan.textContent = `${completed} / ${checklistItems.length} done`;
+        
+        const isCompleted = checklistItems.length > 0 && completed === checklistItems.length;
+        itemEl.classList.toggle('completed', isCompleted);
+    }
 }
 
 function openTaskListModal(taskListFile) {
@@ -1015,9 +1076,13 @@ function closeTaskListModal() {
     saveAppContent();
     domElements.taskListModal.classList.add('hidden');
     domElements.taskListModal.classList.remove('opening');
+
+    if (currentlyEditingTaskList) {
+        updateTasklistItemView(currentlyEditingTaskList);
+    }
+
     currentlyEditingTaskList = null;
     isTaskListEditMode = false;
-    renderCategorySectionContent(currentPath[0].id);
     updateAllProgress();
 }
 
@@ -1084,9 +1149,9 @@ function renderChecklist() {
 
         li.querySelector('.checklist-item-rename').addEventListener('click', () => {
             const newText = prompt('Enter new task text:', checklistItem.text);
-            if (newText && newText.trim() !== '') {
+            if (newText && newText.trim() !== '' && newText.trim() !== checklistItem.text) {
                 checklistItem.text = newText.trim();
-                renderChecklist(); 
+                li.querySelector('.checklist-item-text').textContent = checklistItem.text;
                 saveAppContent();
             }
         });
@@ -1135,7 +1200,11 @@ function renderTabs() {
         tabButton.className = 'tab-button';
         tabButton.id = `tab-button-${category.id}`;
         tabButton.dataset.categoryId = category.id;
-        tabButton.textContent = category.name;
+        
+        // Create a text node for the name to avoid issues when appending other elements
+        const textNode = document.createTextNode(category.name);
+        tabButton.appendChild(textNode);
+        
         tabButton.setAttribute('role', 'tab');
         tabButton.setAttribute('aria-selected', activeTabId === category.id ? 'true' : 'false');
         
@@ -1219,7 +1288,7 @@ function switchTab(categoryIdToActivate) {
             button.setAttribute('aria-selected', isCurrentActive.toString());
         });
     }
-    
+
     if (domElements.tabContentsContainer) {
         domElements.tabContentsContainer.classList.toggle('main-area-scroll-hidden', categoryIdToActivate === 'dashboard');
         domElements.tabContentsContainer.querySelectorAll('section[role="tabpanel"]').forEach(section => {
@@ -1492,7 +1561,7 @@ function showHistoryModal(dateString) {
                     hasCompletedTasks = true;
                     const categoryGroup = document.createElement('div');
                     categoryGroup.className = 'history-category-group';
-                    categoryGroup.innerHTML = `<h5 class="history-category-title">${catData.name}</h5>`;
+                    categoryGroup.innerHTML = `<h5 class="history-category-title ${catData.type === 'special' ? 'special-history-title' : ''}">${catData.name}</h5>`;
                     const ul = document.createElement('ul');
                     catData.tasks.forEach(taskText => {
                         ul.innerHTML += `<li><span>${taskText}</span></li>`;
@@ -1681,7 +1750,13 @@ function updateCategoryTabIndicators() {
             const badge = document.createElement('span');
             badge.className = 'notification-badge';
             badge.textContent = incompleteTasksCount.toString();
-            tabButton.appendChild(badge);
+            
+            const optionsIcon = tabButton.querySelector('.tab-options-icon');
+            if (optionsIcon) {
+                tabButton.insertBefore(badge, optionsIcon);
+            } else {
+                tabButton.appendChild(badge);
+            }
         }
     });
 }
@@ -1803,7 +1878,8 @@ function openNameEntryModal(mode, type, existingItem = null, defaultName = '') {
     if (!domElements.nameEntryModal) return;
     domElements.nameEntryModal.classList.add('opening');
     
-    tempItemCreationData = { mode, type, existingItem };
+    // Merge with existing data for multi-step flows (like category creation)
+    tempItemCreationData = { ...tempItemCreationData, mode, type, existingItem };
 
     let title = 'Name Your Item';
     let cta = 'Confirm';
@@ -1816,6 +1892,10 @@ function openNameEntryModal(mode, type, existingItem = null, defaultName = '') {
         placeholder = `Enter ${type} name`;
     } else if (mode === 'rename' && existingItem) {
         title = `Rename ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+        cta = 'Rename';
+        existingName = existingItem.name;
+    } else if (mode === 'rename_category' && existingItem) {
+        title = `Rename Category`;
         cta = 'Rename';
         existingName = existingItem.name;
     }
@@ -1841,43 +1921,81 @@ function handleConfirmNameEntry() {
     const name = domElements.nameEntryInput.value.trim();
     if (!name) { alert("Name cannot be empty."); return; }
 
-    const { mode, type, existingItem } = tempItemCreationData;
+    const { mode, type, existingItem, categoryType } = tempItemCreationData;
 
+    if (type === 'category') {
+        if (mode === 'create') {
+            if (currentCategories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
+                alert(`A category named "${name}" already exists.`);
+                return;
+            }
+            const newCategory = {
+                id: createUniqueId('cat'), name: name, order: currentCategories.length,
+                deletable: true, type: categoryType || 'standard'
+            };
+            currentCategories.push(newCategory);
+            saveUserCategories(currentCategories);
+            appContent[newCategory.id] = [];
+            saveAppContent();
+            renderTabs();
+            renderAllCategorySections();
+            switchTab(newCategory.id);
+        } else if (mode === 'rename_category' && existingItem) {
+            const category = currentCategories.find(c => c.id === existingItem.id);
+            if (category) {
+                 if (currentCategories.some(c => c.id !== category.id && c.name.toLowerCase() === name.toLowerCase())) {
+                    alert(`A category named "${name}" already exists.`);
+                    return;
+                }
+                category.name = name;
+                saveUserCategories(currentCategories);
+                
+                const tabButton = document.getElementById(`tab-button-${category.id}`);
+                if (tabButton && tabButton.firstChild.nodeType === Node.TEXT_NODE) {
+                    tabButton.firstChild.nodeValue = name;
+                }
+                const categorySection = document.querySelector(`#category-section-${category.id}`);
+                if(categorySection) {
+                    const titleEl = categorySection.querySelector('.category-title-text');
+                    if (titleEl) titleEl.textContent = name;
+                }
+            }
+        }
+        closeNameEntryModal();
+        return;
+    }
+
+    let itemWasChanged = false;
     if (mode === 'create') {
         const parentList = getItemsForPath(currentPath);
         const newItem = {
-            id: createUniqueId(type),
-            name: name,
-            type: type,
-            order: parentList.length
+            id: createUniqueId(type), name: name, type: type, order: parentList.length
         };
-
         if (type === 'folder') newItem.content = [];
         else if (type === 'note') newItem.content = '';
         else if (type === 'tasklist') newItem.content = [];
-
         parentList.push(newItem);
-
+        itemWasChanged = true;
     } else if (mode === 'rename' && existingItem) {
         const found = findItemAndParent(existingItem.id);
         if (found) {
             found.item.name = name;
-        }
-    } else if (mode === 'rename_category') { // Special case for categories
-        const category = currentCategories.find(c => c.id === existingItem.id);
-        if (category) {
-            category.name = name;
-            saveUserCategories(currentCategories);
-            renderTabs();
-            document.querySelector(`#category-section-${category.id} .category-title-text`).textContent = name;
-            closeNameEntryModal();
-            return;
+            itemWasChanged = true;
+            const itemEl = document.querySelector(`.item[data-item-id="${existingItem.id}"]`);
+            if (itemEl) {
+                const nameEl = itemEl.querySelector('.item-name');
+                if (nameEl) nameEl.textContent = name;
+            }
         }
     }
     
-    saveAppContent();
-    renderCategorySectionContent(currentPath[0].id);
-    updateAllProgress();
+    if (itemWasChanged) {
+        saveAppContent();
+        if (mode === 'create') { // Only re-render grid for new items
+           renderCategorySectionContent(currentPath[0].id);
+        }
+        updateAllProgress();
+    }
     closeNameEntryModal();
 }
 
@@ -1992,11 +2110,25 @@ function drawHand(ctx, pos, length, width, color) {
     ctx.rotate(-pos);
 }
 
-function clearLiveClockIntervals() {
-    if (liveClockInterval) clearInterval(liveClockInterval);
-    if (analogClockInterval) clearInterval(analogClockInterval);
-    liveClockInterval = null;
-    analogClockInterval = null;
+function stopLiveClock() {
+    if (liveClockAnimationId) {
+        cancelAnimationFrame(liveClockAnimationId);
+        liveClockAnimationId = null;
+    }
+}
+
+function clockUpdateLoop(timestamp) {
+    if (currentActiveViewId !== 'live-clock') {
+        stopLiveClock();
+        return;
+    }
+    liveClockAnimationId = requestAnimationFrame(clockUpdateLoop);
+
+    if (timestamp - lastClockUpdateTime >= 1000) { // Only update if a second has passed
+        lastClockUpdateTime = timestamp;
+        updateLiveClockDigital();
+        drawAnalogClock();
+    }
 }
 
 function showLiveClockView() {
@@ -2012,11 +2144,9 @@ function showLiveClockView() {
         }
     }
     
-    updateLiveClockDigital();
-    drawAnalogClock();
-    clearLiveClockIntervals();
-    liveClockInterval = setInterval(updateLiveClockDigital, 1000);
-    analogClockInterval = setInterval(drawAnalogClock, 1000);
+    stopLiveClock();
+    lastClockUpdateTime = 0;
+    liveClockAnimationId = requestAnimationFrame(clockUpdateLoop);
 
     isLiveClockFullscreen = false;
     if(domElements.liveClockViewWrapper) domElements.liveClockViewWrapper.classList.remove('fullscreen-active');
@@ -2033,7 +2163,7 @@ function showAppView() {
     if (domElements.liveClockViewWrapper) domElements.liveClockViewWrapper.classList.add('hidden');
     if (domElements.dashboardColumnView) domElements.dashboardColumnView.classList.add('hidden');
     if (domElements.mainContentWrapper) domElements.mainContentWrapper.classList.remove('hidden');
-    clearLiveClockIntervals();
+    stopLiveClock();
 }
 
 function showActivityDashboardView() {
@@ -2044,7 +2174,7 @@ function showActivityDashboardView() {
         domElements.dashboardColumnView.classList.remove('hidden');
         updateDashboardSummaries(); 
     }
-    clearLiveClockIntervals();
+    stopLiveClock();
 }
 
 function toggleLiveClockFullscreen() {
@@ -2175,7 +2305,7 @@ function initializeApp() {
     if (domElements.noteEditorCloseButton) domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
     if (domElements.noteAddImageButton) domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
     if (domElements.imageUploadInput) domElements.imageUploadInput.addEventListener('change', (e) => {
-        if(e.target.files && e.target.files[0]) insertImageIntoNote(e.target.files[0]);
+        if(e.target.files && e.target.files[0]) processAndInsertImage(e.target.files[0]);
     });
 
     if (domElements.taskListCloseButton) domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
