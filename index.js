@@ -37,6 +37,7 @@ const USER_CATEGORIES_KEY = 'lifeTrackerUserCategories_v2';
 const APP_CONTENT_KEY = 'lifeTrackerAppContent_v1'; // Hierarchical content structure
 const CHECKLIST_ITEM_STATE_KEY_PREFIX = 'lifeTrackerChecklistState_';
 const STORAGE_KEY_VIEW_MODE = 'lifeTrackerViewMode';
+const STORAGE_KEY_THEME = 'lifeTrackerTheme';
 
 let currentCategories = []; 
 let appContent = {}; // Main data structure for all items (folders, notes, tasks)
@@ -46,6 +47,7 @@ let currentModalDate = null;
 let itemToDelete = null; 
 let currentPath = []; // Breadcrumb path: [{ id, name, type }, ...]
 let currentViewMode = 'medium'; // 'large', 'medium', 'detail'
+let currentTheme = 'original'; // 'original', 'flip-clock'
 let isAddActionMenuOpen = false;
 let calendarDisplayDate = new Date();
 let isMonthYearPickerOpen = false;
@@ -72,6 +74,7 @@ const domElements = {
   sidePanelOverlay: null,
   menuMainView: null, 
   menuActivityDashboard: null,
+  menuAppearance: null,
   
   appViewWrapper: null, 
   mainContentWrapper: null, 
@@ -139,6 +142,12 @@ const domElements = {
   chooseCategoryTypeCloseButton: null,
   selectStandardCategoryButton: null,
   selectSpecialCategoryButton: null,
+
+  // Theme Choice Modal
+  themeChoiceModal: null,
+  themeChoiceCloseButton: null,
+  selectOriginalThemeButton: null,
+  selectFlipClockThemeButton: null,
   
   // Name Entry Modal
   nameEntryModal: null,
@@ -170,6 +179,9 @@ const domElements = {
 };
 
 function getProgressFillColor(percentage) {
+    if (currentTheme === 'flip-clock') {
+        return '#FFFFFF';
+    }
     const p = Math.max(0, Math.min(100, percentage));
     const hue = (p / 100) * 120; // 0 = red, 120 = green
     return `hsl(${hue}, 100%, 50%)`;
@@ -1461,14 +1473,11 @@ function renderCalendar() {
     let percentageCompleted = 0;
     let hasHistoryData = false; 
     const fillDiv = cell.querySelector('.calendar-day-fill');
-    fillDiv.style.backgroundColor = 'hsla(185, 75%, 50%, 0.1)'; 
 
     if (dateString === todayDateStr) { 
         cell.classList.add('current-day');
         const progress = calculateProgressForDate(dateString, true);
         percentageCompleted = progress.percentage;
-        fillDiv.style.backgroundColor = getProgressFillColor(percentageCompleted); 
-        if (percentageCompleted > 40) cell.classList.add('high-fill'); 
         const anyTaskProgress = calculateProgressForDate(dateString, false);
         hasHistoryData = anyTaskProgress.completedCount > 0 || !!localStorage.getItem(STORAGE_KEY_DAILY_NOTE_PREFIX + dateString);
     } else { 
@@ -1477,21 +1486,18 @@ function renderCalendar() {
             try {
                 const historyEntry = JSON.parse(historyDataString);
                 percentageCompleted = historyEntry.percentageCompleted || 0;
-                fillDiv.style.backgroundColor = getProgressFillColor(percentageCompleted);
-                if (cellDate < todayNorm) fillDiv.style.opacity = '0.7'; 
                 hasHistoryData = (historyEntry.completedTaskStructure && Object.values(historyEntry.completedTaskStructure).some(cat => cat.tasks && cat.tasks.length > 0)) || !!historyEntry.userNote;
-            } catch(e) { 
-                if (cellDate < todayNorm) fillDiv.style.backgroundColor = 'hsla(185, 75%, 50%, 0.3)'; 
-            }
-        } else if (cellDate < todayNorm) { 
-             fillDiv.style.backgroundColor = 'hsla(185, 75%, 50%, 0.3)';
+            } catch(e) { /* ignore */ }
         }
         if (cellDate < todayNorm) cell.classList.add('calendar-day-past');
     }
 
-    if (hasHistoryData) cell.classList.add('has-history');
     fillDiv.style.height = `${percentageCompleted}%`;
-    
+    fillDiv.style.backgroundColor = getProgressFillColor(percentageCompleted);
+
+    if (hasHistoryData) cell.classList.add('has-history');
+    if (percentageCompleted > 40) cell.classList.add('high-fill'); 
+
     cell.addEventListener('click', () => showHistoryModal(dateString));
     domElements.calendarGrid.appendChild(cell);
   }
@@ -1840,6 +1846,33 @@ function handleSelectCategoryType(type) {
     openNameEntryModal('create', 'category', null, defaultName);
 }
 
+// Theme Management
+function applyTheme(theme) {
+    document.body.dataset.theme = theme;
+    currentTheme = theme;
+}
+
+function saveTheme(theme) {
+    localStorage.setItem(STORAGE_KEY_THEME, theme);
+    applyTheme(theme);
+    updateAllProgress(); // Re-render elements with dynamic colors
+}
+
+function openThemeChoiceModal() {
+    if (domElements.themeChoiceModal) {
+        domElements.themeChoiceModal.classList.add('opening');
+        domElements.themeChoiceModal.classList.remove('hidden');
+    }
+}
+
+function closeThemeChoiceModal() {
+     if (domElements.themeChoiceModal) {
+        domElements.themeChoiceModal.classList.add('hidden');
+        domElements.themeChoiceModal.classList.remove('opening');
+    }
+}
+
+
 function generateDefaultName(type, parentList) {
     const baseNameMap = {
         folder: 'New Folder',
@@ -1999,13 +2032,12 @@ function toggleSidePanel() {
         menuItems.forEach(item => item.classList.remove('active-menu-item'));
         if (currentActiveViewId === 'main' && domElements.menuMainView) {
             domElements.menuMainView.classList.add('active-menu-item');
-            domElements.menuMainView.focus();
         } else if (currentActiveViewId === 'activity-dashboard' && domElements.menuActivityDashboard) {
             domElements.menuActivityDashboard.classList.add('active-menu-item');
-            domElements.menuActivityDashboard.focus();
-        } else if (menuItems.length > 0) {
-            menuItems[0].focus();
         }
+        // Focus the first item when opening
+        const firstItem = domElements.sidePanelMenu.querySelector('.side-panel-item');
+        if(firstItem) firstItem.focus();
     } else {
         domElements.hamburgerButton.focus();
     }
@@ -2089,6 +2121,8 @@ function initializeApp() {
     domElements.mobileProgressLocation = document.getElementById('mobile-progress-location');
     domElements.nameEntryActions = document.getElementById('name-entry-actions');
 
+    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'original';
+    applyTheme(savedTheme);
 
     loadAppData();
     renderTabs();
@@ -2110,7 +2144,12 @@ function initializeApp() {
     
     if (domElements.menuMainView) domElements.menuMainView.addEventListener('click', () => { showAppView(); switchTab('dashboard'); toggleSidePanel(); });
     if (domElements.menuActivityDashboard) domElements.menuActivityDashboard.addEventListener('click', () => { showActivityDashboardView(); toggleSidePanel(); });
+    if (domElements.menuAppearance) domElements.menuAppearance.addEventListener('click', () => { openThemeChoiceModal(); toggleSidePanel(); });
     
+    if (domElements.themeChoiceCloseButton) domElements.themeChoiceCloseButton.addEventListener('click', closeThemeChoiceModal);
+    if (domElements.selectOriginalThemeButton) domElements.selectOriginalThemeButton.addEventListener('click', () => { saveTheme('original'); closeThemeChoiceModal(); });
+    if (domElements.selectFlipClockThemeButton) domElements.selectFlipClockThemeButton.addEventListener('click', () => { saveTheme('flip-clock'); closeThemeChoiceModal(); });
+
     if (domElements.addCategoryButton) domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
     if (domElements.chooseCategoryTypeCloseButton) domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
     if (domElements.selectStandardCategoryButton) domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
