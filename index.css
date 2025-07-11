@@ -1748,102 +1748,6 @@ main#tab-content > section.hidden {
     text-shadow: 0 0 5px rgba(127, 255, 212, 0.5);
 }
 
-/* Live Clock View Styles */
-#live-clock-view-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    height: 100%;
-    background-color: #0A0812; /* Very dark, almost black background */
-    position: relative; /* For fullscreen button */
-    padding: 20px;
-}
-#live-clock-view-wrapper.hidden { display: none; }
-
-#analog-clock-container {
-    width: clamp(200px, 50vmin, 400px); /* Responsive size */
-    height: clamp(200px, 50vmin, 400px);
-    margin-bottom: 30px;
-    position: relative;
-    transition: width 0.4s ease-in-out, height 0.4s ease-in-out;
-}
-#analog-clock-canvas {
-    display: block;
-    border: 5px solid #1C1A2C; /* Dark purple border */
-    border-radius: 50%;
-    box-shadow: 0 0 20px rgba(190, 147, 253, 0.2), /* Outer glow */
-                inset 0 0 15px rgba(0,0,0,0.3); /* Inner shadow for depth */
-}
-
-#live-clock-digital-display-container {
-    text-align: center;
-    color: #E0E0FF;
-    transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
-}
-#live-clock-time {
-    font-size: clamp(3em, 10vw, 6em); /* Responsive font size */
-    font-weight: 600;
-    line-height: 1;
-    color: #00CFE8; /* Cyan for time */
-    text-shadow: 0 0 10px rgba(0, 207, 232, 0.4);
-}
-#live-clock-period {
-    font-size: clamp(1.5em, 5vw, 2.5em);
-    font-weight: 300;
-    margin-left: 0.2em; /* Spacing for AM/PM next to seconds */
-    vertical-align: super;
-    opacity: 0.8;
-}
-#live-clock-date {
-    font-size: clamp(1em, 3vw, 1.5em);
-    font-weight: 400;
-    margin-top: 10px;
-    color: #A09CB8; /* Muted lavender */
-}
-
-.live-clock-fullscreen-button { /* This is an .icon-button */
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    color: #00CFE8;
-    background-color: rgba(30, 26, 48, 0.7);
-    border-radius: 50%;
-    padding: 10px;
-    z-index: 5; /* Above clock elements */
-}
-.live-clock-fullscreen-button svg { width: 24px; height: 24px; } /* Specific size */
-.live-clock-fullscreen-button:hover,
-.live-clock-fullscreen-button:focus-visible {
-    background-color: rgba(0, 207, 232, 0.2); /* UPDATED: Cyan highlight */
-    color: #33DFFF;
-}
-
-/* Live Clock Fullscreen Active State */
-#live-clock-view-wrapper.fullscreen-active {
-    padding: 0; /* Remove padding in fullscreen */
-    position: fixed; /* Take over whole screen */
-    top: 0; left: 0; width: 100vw; height: 100vh;
-    z-index: 2000; /* Highest z-index */
-}
-#live-clock-view-wrapper.fullscreen-active #analog-clock-container {
-    width: clamp(300px, 80vmin, 600px); /* Larger in fullscreen */
-    height: clamp(300px, 80vmin, 600px);
-}
-#live-clock-view-wrapper.fullscreen-active #live-clock-digital-display-container {
-    transform: scale(1.2);
-}
-#live-clock-view-wrapper.fullscreen-active .live-clock-fullscreen-button {
-    top: 30px; right: 30px; /* Adjust position */
-}
-#live-clock-view-wrapper.fullscreen-active #live-clock-digital-display-container.digital-hidden {
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-}
-
-
 /* Utility Classes */
 .hidden { display: none !important; }
 .sr-only {
@@ -1870,9 +1774,6 @@ main#tab-content > section.hidden {
     
     .view-mode-medium { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
     .view-mode-large { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-
-    #live-clock-view-wrapper { padding: 10px; }
-    .live-clock-fullscreen-button { top: 15px; right: 15px; }
 }
 
 @media (max-width: 480px) {
