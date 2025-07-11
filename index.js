@@ -58,10 +58,7 @@ let currentContextMenuTargetTab = null;
 let itemContextMenu = { element: null, target: null };
 let midnightTimer = null;
 let tempItemCreationData = null;
-let liveClockAnimationId = null;
-let lastClockUpdateTime = 0;
-let currentActiveViewId = 'main'; // 'main', 'live-clock', 'activity-dashboard'
-let isLiveClockFullscreen = false;
+let currentActiveViewId = 'main'; // 'main', 'activity-dashboard'
 let currentlyEditingNote = null; // { id, name, content }
 let currentlyEditingTaskList = null; // The task list being managed in the modal
 let isTaskListEditMode = false;
@@ -74,19 +71,8 @@ const domElements = {
   sidePanelMenu: null,
   sidePanelOverlay: null,
   menuMainView: null, 
-  menuLiveClock: null,
   menuActivityDashboard: null,
   
-  // Live Clock View
-  liveClockViewWrapper: null,
-  liveClockTime: null,
-  liveClockPeriod: null,
-  liveClockDigitalDisplayContainer: null, 
-  liveClockDate: null,
-  analogClockContainer: null,
-  analogClockCanvas: null,
-  liveClockFullscreenButton: null,
-
   appViewWrapper: null, 
   mainContentWrapper: null, 
   dashboardColumnView: null, 
@@ -2014,9 +2000,6 @@ function toggleSidePanel() {
         if (currentActiveViewId === 'main' && domElements.menuMainView) {
             domElements.menuMainView.classList.add('active-menu-item');
             domElements.menuMainView.focus();
-        } else if (currentActiveViewId === 'live-clock' && domElements.menuLiveClock) {
-            domElements.menuLiveClock.classList.add('active-menu-item');
-            domElements.menuLiveClock.focus();
         } else if (currentActiveViewId === 'activity-dashboard' && domElements.menuActivityDashboard) {
             domElements.menuActivityDashboard.classList.add('active-menu-item');
             domElements.menuActivityDashboard.focus();
@@ -2028,170 +2011,18 @@ function toggleSidePanel() {
     }
 }
 
-
-function updateLiveClockDigital() {
-    if (!domElements.liveClockTime || !domElements.liveClockPeriod || !domElements.liveClockDate) return;
-    const now = new Date();
-    let hours = now.getHours();
-    const minutes = now.getMinutes().toString().padStart(2, '0');
-    const seconds = now.getSeconds().toString().padStart(2, '0');
-    const period = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; 
-    const hoursStr = hours.toString().padStart(2, '0');
-
-    domElements.liveClockTime.textContent = `${hoursStr}:${minutes}:${seconds}`;
-    domElements.liveClockPeriod.textContent = period;
-    
-    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-    domElements.liveClockDate.textContent = now.toLocaleDateString(undefined, options);
-}
-
-function drawAnalogClock() {
-    if (!domElements.analogClockCanvas) return;
-    const canvas = domElements.analogClockCanvas;
-    const ctx = canvas.getContext('2d');
-    const radius = canvas.height / 2;
-    ctx.translate(radius, radius);
-
-    ctx.clearRect(-radius, -radius, canvas.width, canvas.height);
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.9, 0, 2 * Math.PI);
-    ctx.fillStyle = '#0D0C15'; 
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(0, 0, radius * 0.05, 0, 2 * Math.PI);
-    ctx.fillStyle = '#00CFE8'; 
-    ctx.fill();
-
-    ctx.font = radius * 0.15 + "px Poppins";
-    ctx.textBaseline = "middle";
-    ctx.textAlign = "center";
-    ctx.fillStyle = '#E0E0FF'; 
-    for (let num = 1; num <= 12; num++) {
-        const ang = num * Math.PI / 6;
-        ctx.rotate(ang);
-        ctx.translate(0, -radius * 0.75);
-        ctx.rotate(-ang);
-        ctx.fillText(num.toString(), 0, 0);
-        ctx.rotate(ang);
-        ctx.translate(0, radius * 0.75);
-        ctx.rotate(-ang);
-    }
-
-    const now = new Date();
-    const hour = now.getHours();
-    const minute = now.getMinutes();
-    const second = now.getSeconds();
-
-    let hourAngle = (hour % 12 + minute / 60) * Math.PI / 6 - Math.PI / 2;
-    drawHand(ctx, hourAngle, radius * 0.5, radius * 0.06, '#BE93FD'); 
-
-    let minuteAngle = (minute + second / 60) * Math.PI / 30 - Math.PI / 2;
-    drawHand(ctx, minuteAngle, radius * 0.7, radius * 0.04, '#7FFFD4'); 
-
-    let secondAngle = second * Math.PI / 30 - Math.PI / 2;
-    drawHand(ctx, secondAngle, radius * 0.8, radius * 0.02, '#00CFE8'); 
-
-    ctx.translate(-radius, -radius); 
-}
-
-function drawHand(ctx, pos, length, width, color) {
-    ctx.beginPath();
-    ctx.lineWidth = width;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = color;
-    ctx.moveTo(0, 0);
-    ctx.rotate(pos);
-    ctx.lineTo(length, 0);
-    ctx.stroke();
-    ctx.rotate(-pos);
-}
-
-function stopLiveClock() {
-    if (liveClockAnimationId) {
-        cancelAnimationFrame(liveClockAnimationId);
-        liveClockAnimationId = null;
-    }
-}
-
-function clockUpdateLoop(timestamp) {
-    if (currentActiveViewId !== 'live-clock') {
-        stopLiveClock();
-        return;
-    }
-    liveClockAnimationId = requestAnimationFrame(clockUpdateLoop);
-
-    if (timestamp - lastClockUpdateTime >= 1000) { // Only update if a second has passed
-        lastClockUpdateTime = timestamp;
-        updateLiveClockDigital();
-        drawAnalogClock();
-    }
-}
-
-function showLiveClockView() {
-    currentActiveViewId = 'live-clock';
-    if (domElements.mainContentWrapper) domElements.mainContentWrapper.classList.add('hidden');
-    if (domElements.dashboardColumnView) domElements.dashboardColumnView.classList.add('hidden');
-    if (domElements.liveClockViewWrapper) {
-        domElements.liveClockViewWrapper.classList.remove('hidden');
-        if (domElements.analogClockContainer && domElements.analogClockCanvas) {
-            const size = Math.min(domElements.analogClockContainer.clientWidth, domElements.analogClockContainer.clientHeight);
-            domElements.analogClockCanvas.width = size;
-            domElements.analogClockCanvas.height = size;
-        }
-    }
-    
-    stopLiveClock();
-    lastClockUpdateTime = 0;
-    liveClockAnimationId = requestAnimationFrame(clockUpdateLoop);
-
-    isLiveClockFullscreen = false;
-    if(domElements.liveClockViewWrapper) domElements.liveClockViewWrapper.classList.remove('fullscreen-active');
-    if(domElements.liveClockFullscreenButton) {
-        domElements.liveClockFullscreenButton.querySelector('.fullscreen-icon-expand').classList.remove('hidden');
-        domElements.liveClockFullscreenButton.querySelector('.fullscreen-icon-contract').classList.add('hidden');
-    }
-    if(domElements.liveClockDigitalDisplayContainer) domElements.liveClockDigitalDisplayContainer.classList.remove('digital-hidden');
-
-}
-
 function showAppView() {
     currentActiveViewId = 'main';
-    if (domElements.liveClockViewWrapper) domElements.liveClockViewWrapper.classList.add('hidden');
     if (domElements.dashboardColumnView) domElements.dashboardColumnView.classList.add('hidden');
     if (domElements.mainContentWrapper) domElements.mainContentWrapper.classList.remove('hidden');
-    stopLiveClock();
 }
 
 function showActivityDashboardView() {
     currentActiveViewId = 'activity-dashboard';
     if (domElements.mainContentWrapper) domElements.mainContentWrapper.classList.add('hidden');
-    if (domElements.liveClockViewWrapper) domElements.liveClockViewWrapper.classList.add('hidden');
     if (domElements.dashboardColumnView) {
         domElements.dashboardColumnView.classList.remove('hidden');
         updateDashboardSummaries(); 
-    }
-    stopLiveClock();
-}
-
-function toggleLiveClockFullscreen() {
-    if (!domElements.liveClockViewWrapper || !domElements.liveClockFullscreenButton) return;
-    isLiveClockFullscreen = !isLiveClockFullscreen;
-    domElements.liveClockViewWrapper.classList.toggle('fullscreen-active', isLiveClockFullscreen);
-    domElements.liveClockFullscreenButton.querySelector('.fullscreen-icon-expand').classList.toggle('hidden', isLiveClockFullscreen);
-    domElements.liveClockFullscreenButton.querySelector('.fullscreen-icon-contract').classList.toggle('hidden', !isLiveClockFullscreen);
-
-    if (domElements.analogClockContainer && domElements.analogClockCanvas) {
-            const size = Math.min(domElements.analogClockContainer.offsetWidth, domElements.analogClockContainer.offsetHeight);
-            domElements.analogClockCanvas.width = size;
-            domElements.analogClockCanvas.height = size;
-            drawAnalogClock(); 
-    }
-    if (!isLiveClockFullscreen && domElements.liveClockDigitalDisplayContainer) {
-        domElements.liveClockDigitalDisplayContainer.classList.remove('digital-hidden');
     }
 }
 
@@ -2256,7 +2087,6 @@ function initializeApp() {
     domElements.dashboardColumnView = document.getElementById('dashboard-column');
     domElements.dashboardSummariesContainer = document.getElementById('dashboard-summaries');
     domElements.mobileProgressLocation = document.getElementById('mobile-progress-location');
-    domElements.liveClockDigitalDisplayContainer = document.getElementById('live-clock-digital-display-container');
     domElements.nameEntryActions = document.getElementById('name-entry-actions');
 
 
@@ -2271,7 +2101,6 @@ function initializeApp() {
     switchTab('dashboard'); 
     
     updateAllProgress();
-    updateLayoutBasedOnScreenSize(); 
 
     // Event Listeners
     if (domElements.dashboardTabButton) domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
@@ -2280,16 +2109,8 @@ function initializeApp() {
     if (domElements.sidePanelOverlay) domElements.sidePanelOverlay.addEventListener('click', toggleSidePanel);
     
     if (domElements.menuMainView) domElements.menuMainView.addEventListener('click', () => { showAppView(); switchTab('dashboard'); toggleSidePanel(); });
-    if (domElements.menuLiveClock) domElements.menuLiveClock.addEventListener('click', () => { showLiveClockView(); toggleSidePanel(); });
     if (domElements.menuActivityDashboard) domElements.menuActivityDashboard.addEventListener('click', () => { showActivityDashboardView(); toggleSidePanel(); });
     
-    if (domElements.liveClockFullscreenButton) domElements.liveClockFullscreenButton.addEventListener('click', toggleLiveClockFullscreen);
-    if (domElements.liveClockViewWrapper) domElements.liveClockViewWrapper.addEventListener('click', (e) => {
-        if (isLiveClockFullscreen && e.target !== domElements.liveClockFullscreenButton && !domElements.liveClockFullscreenButton.contains(e.target)) {
-             if(domElements.liveClockDigitalDisplayContainer) domElements.liveClockDigitalDisplayContainer.classList.toggle('digital-hidden');
-        }
-    });
-
     if (domElements.addCategoryButton) domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
     if (domElements.chooseCategoryTypeCloseButton) domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
     if (domElements.selectStandardCategoryButton) domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
@@ -2350,7 +2171,6 @@ function initializeApp() {
     if(domElements.ctxRenameCategoryButton) domElements.ctxRenameCategoryButton.addEventListener('click', handleRenameCategoryAction);
     if(domElements.ctxDeleteCategoryButton) domElements.ctxDeleteCategoryButton.addEventListener('click', handleDeleteCategoryAction);
     
-    window.addEventListener('resize', updateLayoutBasedOnScreenSize);
 }
 
 function renderAllCategorySections() {
@@ -2378,21 +2198,6 @@ function renderAllCategorySections() {
 
         domElements.tabContentsContainer.appendChild(sectionElement);
     });
-}
-
-
-function updateLayoutBasedOnScreenSize() {
-    if (currentActiveViewId === 'live-clock' && domElements.liveClockViewWrapper && !domElements.liveClockViewWrapper.classList.contains('hidden')) {
-        if (domElements.analogClockContainer && domElements.analogClockCanvas) {
-            const parentStyle = window.getComputedStyle(domElements.analogClockContainer);
-            const newSize = Math.min(parseInt(parentStyle.width, 10), parseInt(parentStyle.height, 10));
-            if (domElements.analogClockCanvas.width !== newSize || domElements.analogClockCanvas.height !== newSize) {
-                 domElements.analogClockCanvas.width = newSize;
-                 domElements.analogClockCanvas.height = newSize;
-                 drawAnalogClock();
-            }
-        }
-    }
 }
 
 function showCategoryContextMenu(categoryId, targetButton) {
