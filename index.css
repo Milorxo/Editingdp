@@ -121,10 +121,12 @@ main#tab-content.main-area-scroll-hidden {
 }
 .item.leaving {
     animation: fadeOut 0.3s ease-out forwards;
+    will-change: opacity;
 }
 
 .modal.opening .modal-content {
     animation: scaleIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    will-change: transform, opacity;
 }
 
 
@@ -225,21 +227,13 @@ header h1 {
     background-color: rgba(10, 8, 18, 0.7); /* Darker, slightly transparent for depth */
     border-bottom: 1px solid rgba(190, 147, 253, 0.1); /* Subtle purple border */
 
-    /* Custom scrollbar for horizontal tab scrolling only */
-    scrollbar-width: thin;
-    scrollbar-color: #BE93FD #12101c; /* thumb and track */
+    /* Hide scrollbar but keep functionality */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
 }
 
 #tabs::-webkit-scrollbar {
-    height: 4px; /* Thin horizontal scrollbar */
-    width: 4px;
-}
-#tabs::-webkit-scrollbar-track {
-    background: #12101c; /* Dark track for tabs scrollbar */
-}
-#tabs::-webkit-scrollbar-thumb {
-    background-color: #BE93FD; /* Purple thumb */
-    border-radius: 2px;
+    display: none; /* For Chrome, Safari, and Opera */
 }
 
 .icon-button { /* Base for icon buttons */
@@ -253,6 +247,7 @@ header h1 {
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, color 0.2s ease;
+    will-change: transform, background-color;
 }
 
 .icon-button:hover,
@@ -290,6 +285,7 @@ header h1 {
     display: flex; /* For aligning text and potential icons/badges */
     align-items: center;
     flex-shrink: 0; /* Ensures tabs don't shrink and cause wrapping */
+    will-change: color, background-color, border-color, box-shadow;
 }
 
 /* Tab Label Colors by Type */
@@ -1190,6 +1186,7 @@ main#tab-content > section.hidden {
     display: flex;
     overflow: hidden;
     user-select: none; /* Prevent text selection during drag */
+    will-change: transform;
 }
 .item:hover, .item:focus-within {
     background-color: rgba(40, 35, 65, 0.8);
@@ -1461,6 +1458,9 @@ main#tab-content > section.hidden {
 .task-list-header .fullscreen-modal-title-text {
     margin-bottom: 0;
     flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .task-list-controls {
     display: flex;
@@ -1619,6 +1619,7 @@ main#tab-content > section.hidden {
     background-color: #BE93FD; /* Theme Purple */
     border-radius: 1px;
     transition: all 0.3s ease;
+    will-change: transform, opacity;
 }
 .hamburger-button.open .hamburger-line:nth-child(1) {
     transform: translateY(7px) rotate(45deg);
@@ -1766,6 +1767,7 @@ main#tab-content > section.hidden {
     height: clamp(200px, 50vmin, 400px);
     margin-bottom: 30px;
     position: relative;
+    transition: width 0.4s ease-in-out, height 0.4s ease-in-out;
 }
 #analog-clock-canvas {
     display: block;
@@ -1778,6 +1780,7 @@ main#tab-content > section.hidden {
 #live-clock-digital-display-container {
     text-align: center;
     color: #E0E0FF;
+    transition: transform 0.4s ease-in-out, opacity 0.4s ease-in-out;
 }
 #live-clock-time {
     font-size: clamp(3em, 10vw, 6em); /* Responsive font size */
@@ -1827,6 +1830,9 @@ main#tab-content > section.hidden {
 #live-clock-view-wrapper.fullscreen-active #analog-clock-container {
     width: clamp(300px, 80vmin, 600px); /* Larger in fullscreen */
     height: clamp(300px, 80vmin, 600px);
+}
+#live-clock-view-wrapper.fullscreen-active #live-clock-digital-display-container {
+    transform: scale(1.2);
 }
 #live-clock-view-wrapper.fullscreen-active .live-clock-fullscreen-button {
     top: 30px; right: 30px; /* Adjust position */
