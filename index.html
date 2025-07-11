@@ -18,7 +18,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
-<body>
+<body data-theme="original">
     <button id="hamburger-button" class="hamburger-button" aria-label="Open menu" aria-controls="side-panel-menu" aria-expanded="false">
         <span class="hamburger-line"></span>
         <span class="hamburger-line"></span>
@@ -30,6 +30,7 @@
             <ul>
                 <li><button id="menu-main-view" class="side-panel-item">Main</button></li>
                 <li><button id="menu-activity-dashboard" class="side-panel-item">Activity Dashboard</button></li>
+                <li><button id="menu-appearance" class="side-panel-item">Appearance</button></li>
             </ul>
         </nav>
     </div>
@@ -112,6 +113,18 @@
     </div> <!-- End App Container -->
 
     <!-- Modals and Templates -->
+    <div id="theme-choice-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="theme-choice-title">
+        <div class="modal-content">
+            <button id="theme-choice-close-button" class="close-button" aria-label="Close theme choice">&times;</button>
+            <h3 id="theme-choice-title" class="modal-title-text">Choose Appearance</h3>
+            <p class="modal-description">Select your preferred theme for the application.</p>
+            <div class="modal-actions-centered">
+                <button id="select-original-theme-button" class="modal-button">Original Theme</button>
+                <button id="select-flip-clock-theme-button" class="modal-button">Dark Theme</button>
+            </div>
+        </div>
+    </div>
+
     <div id="month-year-picker-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="month-year-picker-title">
         <div id="month-year-picker-content" class="month-year-picker-content">
             <button id="month-year-picker-close-button" class="close-button" aria-label="Close month year picker">&times;</button>
