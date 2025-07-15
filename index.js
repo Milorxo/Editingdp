@@ -1214,6 +1214,7 @@ function renderChecklist() {
                 currentlyEditingTaskList.content = currentlyEditingTaskList.content.filter(ci => ci.id !== checklistItem.id);
                 renderChecklist();
                 saveAppContent();
+                updateCategoryTabBadges();
             }
         });
 
@@ -1238,6 +1239,7 @@ function handleAddChecklistItem(e) {
         currentlyEditingTaskList.content.push(newItem);
         saveAppContent();
         renderChecklist();
+        updateCategoryTabBadges();
         domElements.addChecklistItemInput.value = '';
     }
 }
@@ -1314,10 +1316,6 @@ function renderTabs() {
         });
 
         tabButton.addEventListener('click', (e) => {
-            if (e.target === tabButton && !optionsIcon.contains(e.target)) { 
-                tabButton.classList.add('show-badge-highlight');
-                setTimeout(() => tabButton.classList.remove('show-badge-highlight'), 300);
-            }
             switchTab(category.id);
         });
         if (addCatButton) {
@@ -1326,37 +1324,34 @@ function renderTabs() {
             domElements.tabs.appendChild(tabButton);
         }
     });
-    updateCategoryTabIndicators();
+    updateCategoryTabBadges();
 }
 
-function updateCategoryTabIndicators() {
-    const today = getTodayDateString();
+function updateCategoryTabBadges() {
     if (!domElements.tabs) return;
 
     currentCategories.forEach(category => {
         const tabButton = domElements.tabs.querySelector(`#tab-button-${category.id}`);
-        if (!tabButton || category.type !== 'standard') {
-            if (tabButton) {
-                tabButton.classList.remove('category-complete-indicator');
-            }
-            return;
+        if (!tabButton) return;
+
+        // Remove existing badge first
+        const existingBadge = tabButton.querySelector('.notification-badge');
+        if (existingBadge) {
+            existingBadge.remove();
         }
-        
+
         const allCategoryTaskLists = appContent[category.id] ? getAllTaskListFiles(appContent[category.id]) : [];
         
-        let totalItems = 0;
-        let completedItems = 0;
-
+        let totalTasks = 0;
         allCategoryTaskLists.forEach(tl => {
-            const checklistItems = tl.content || [];
-            totalItems += checklistItems.length;
-            completedItems += checklistItems.filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(today, ci.id)) === 'true').length;
+            totalTasks += (tl.content || []).length;
         });
 
-        if (totalItems > 0 && completedItems === totalItems) {
-            tabButton.classList.add('category-complete-indicator');
-        } else {
-            tabButton.classList.remove('category-complete-indicator');
+        if (totalTasks > 0) {
+            const badge = document.createElement('span');
+            badge.className = 'notification-badge';
+            badge.textContent = totalTasks;
+            tabButton.appendChild(badge);
         }
     });
 }
@@ -1483,7 +1478,7 @@ function updateAllProgress() {
   if (currentActiveViewId === 'activity-dashboard') {
     updateDashboardSummaries(); 
   }
-  updateCategoryTabIndicators();
+  updateCategoryTabBadges();
   renderCalendar(); 
 }
 
