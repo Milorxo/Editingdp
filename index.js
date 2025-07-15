@@ -552,7 +552,7 @@ function saveDayToHistory(dateToSave) {
         if (!appContent[cat.id]) return;
         getAllTaskListFiles(appContent[cat.id]).forEach(taskList => {
             (taskList.content || []).forEach(checklistItem => {
-                localStorage.removeItem(getChecklistItemStateStorageKey(dateToSave, checklistItemId));
+                localStorage.removeItem(getChecklistItemStateStorageKey(dateToSave, checklistItem.id));
             });
         });
     });
