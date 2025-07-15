@@ -5,7 +5,7 @@
     padding: 0;
 }
 
-:root, [data-theme="original"] {
+:root, [data-theme="original"], [data-theme="power-safe"] {
     /* Color Palette */
     --bg-color: #0D0C15;
     --bg-gradient: linear-gradient(135deg, #0D0C15 0%, #171522 30%, #100E1C 70%, #0A0812 100%);
@@ -91,6 +91,29 @@
     --scrollbar-track: #050408;
     --scrollbar-color-firefox: var(--scrollbar-thumb) var(--scrollbar-track);
 }
+
+[data-theme="power-safe"] {
+    --bg-animation: none;
+    --header-animation: none;
+    
+    --glow-cyan-soft: none;
+    --glow-cyan-inner: none;
+    --glow-cyan-header-1: none;
+    --glow-cyan-header-2: none;
+    --glow-logo: none;
+    --glow-purple-soft: none;
+    --glow-purple-inner: none;
+    --glow-gold-soft: none;
+    --glow-gold-inner: none;
+    --glow-red: none;
+    --glow-success: none;
+    --glow-input-focus: 0 0 0 2px rgba(190, 147, 253, 0.25);
+    --glow-scrollbar: none;
+    --glow-scrollbar-hover: none;
+
+    --modal-blur: none;
+}
+
 
 [data-theme="flip-clock"] {
     --bg-color: #000000;
@@ -205,11 +228,13 @@ html {
 }
 
 /* Hide scrollbars for specific sections: Activity Dashboard and Daily Productivity column */
-#left-column::-webkit-scrollbar {
+#left-column::-webkit-scrollbar,
+#progress-management-list::-webkit-scrollbar {
     display: none; /* For WebKit browsers */
 }
 
-#left-column {
+#left-column,
+#progress-management-list {
     scrollbar-width: none; /* For Firefox */
     -ms-overflow-style: none; /* For IE and Edge (older versions) */
 }
@@ -313,8 +338,7 @@ body {
 #dashboard-column h2,
 .dashboard-category-summary h3,
 .folder-view-title,
-#today-progress-container h3,
-#current-week-progress-container h3,
+.progress-container h3,
 #daily-note-container h3,
 .history-section-header h4,
 .history-points-text,
@@ -335,6 +359,7 @@ body {
 #app-view-wrapper {
     display: flex;
     flex-grow: 1;
+    width: 100%;
     overflow: hidden;
 }
 
@@ -790,6 +815,16 @@ main#tab-content > section.hidden {
     background-color: transparent;
     cursor: default;
 }
+.calendar-day-cell.future-day {
+    opacity: 0.5;
+    cursor: default;
+    background-color: transparent;
+}
+.calendar-day-cell.future-day:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: transparent;
+}
 .calendar-day-number {
     font-size: 0.8em;
     padding: 5px;
@@ -894,14 +929,14 @@ main#tab-content > section.hidden {
 }
 
 /* Progress Bars Section */
-#today-progress-container, #current-week-progress-container {
+.progress-container {
     background-color: var(--panel-bg-dark);
     padding: 20px;
     border-radius: 12px;
     box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     margin-bottom: 25px;
 }
-#today-progress-container h3, #current-week-progress-container h3 {
+.progress-container h3 {
     font-size: 1.2em;
     color: var(--accent-purple-light);
     margin-bottom: 12px;
@@ -926,7 +961,7 @@ main#tab-content > section.hidden {
     color: var(--text-on-fill);
     font-size: 0.8em;
     font-weight: 600;
-    transition: width 0.5s ease-out, background-color 0.5s ease-out;
+    transition: width 0.5s ease-out, background-color 0.5s ease-out, background-image 0.5s ease-out;
 }
 .points-stat {
     font-size: 0.9em;
@@ -1887,7 +1922,9 @@ main#tab-content > section.hidden {
     list-style: none;
 }
 .side-panel-menu nav li .side-panel-item {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     width: 100%;
     padding: 15px 20px;
     background: none;
@@ -1909,6 +1946,68 @@ main#tab-content > section.hidden {
 }
 .side-panel-menu nav li .side-panel-item.active-menu-item {
     background-color: var(--accent-cyan-bg-subtle);
+    color: var(--text-light);
+    font-weight: 500;
+}
+#appearance-menu-item-container {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid rgba(190, 147, 253, 0.08);
+}
+#appearance-menu-item-container .side-panel-item {
+    border-bottom: none;
+}
+[data-theme="flip-clock"] #appearance-menu-item-container {
+    border-bottom-color: #333;
+}
+.appearance-arrow {
+    transition: transform 0.2s ease-out;
+}
+#appearance-menu-item-container.open .appearance-arrow {
+    transform: rotate(180deg);
+}
+
+.theme-dropdown-container {
+    max-height: 0;
+    overflow: hidden;
+    padding-left: 20px;
+    background-color: rgba(0,0,0,0.2);
+    box-shadow: inset 0 4px 8px -4px rgba(0,0,0,0.4);
+    transition: max-height 0.3s ease-out;
+}
+#appearance-menu-item-container.open .theme-dropdown-container {
+    max-height: 200px;
+}
+.theme-option-button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 12px 20px 12px 15px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-family: 'Poppins', sans-serif;
+    font-size: 0.95em;
+    cursor: pointer;
+    text-align: left;
+}
+.theme-option-button:hover, .theme-option-button:focus-visible {
+    background-color: var(--accent-purple-bg-faint);
+    color: var(--accent-purple-light);
+}
+.theme-active-indicator {
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-cyan);
+    border-radius: 50%;
+    box-shadow: var(--glow-cyan-soft);
+    visibility: hidden;
+}
+.theme-option-button.active .theme-active-indicator {
+    visibility: visible;
+}
+.theme-option-button.active {
     color: var(--text-light);
     font-weight: 500;
 }
@@ -1999,6 +2098,283 @@ main#tab-content > section.hidden {
     text-shadow: var(--glow-success);
 }
 
+.dashboard-category-summary .progress-bar-container {
+    margin-top: 12px;
+    height: 8px;
+    border-radius: 4px;
+    background-color: var(--progress-bar-bg);
+    border: 1px solid var(--progress-bar-border);
+    overflow: hidden;
+    width: 100%;
+}
+
+.dashboard-category-summary .progress-bar-fill {
+    height: 100%;
+    width: 0;
+    border-radius: 4px;
+    transition: width 0.5s ease-out, background-image 0.5s ease-out, background-color 0.5s ease-out;
+}
+
+/* Progress Management View */
+#progress-management-view {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+    background-color: var(--panel-bg);
+    position: relative;
+}
+.progress-management-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--panel-border);
+    flex-shrink: 0;
+    text-align: center;
+}
+.progress-management-header h1 {
+    font-size: 1.5em;
+    color: var(--accent-cyan);
+    font-weight: 600;
+}
+#progress-management-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 20px 20px 80px 20px; /* Add padding for FAB */
+}
+.progress-section {
+    margin-bottom: 30px;
+}
+.progress-section-title {
+    font-size: 1.3em;
+    color: var(--accent-purple-light);
+    margin-bottom: 15px;
+    padding-bottom: 5px;
+    border-bottom: 1px solid var(--panel-border);
+}
+.progress-list-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+.progress-tracker-item {
+    background-color: var(--panel-bg-dark);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+}
+.progress-tracker-info {
+    flex-grow: 1;
+}
+.progress-tracker-info h4 {
+    font-size: 1.2em;
+    color: var(--accent-purple-light);
+    margin-bottom: 5px;
+}
+.progress-tracker-info p {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+}
+.progress-tracker-actions {
+    display: flex;
+    gap: 10px;
+}
+.progress-tracker-actions .icon-button {
+    color: var(--text-secondary);
+}
+.progress-tracker-actions .icon-button:hover {
+    color: var(--text-light);
+}
+
+#progress-management-footer {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    z-index: 100;
+}
+.fab-button {
+    background-color: var(--accent-cyan);
+    color: var(--text-on-primary-action);
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 207, 232, 0.4);
+    transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+.fab-button:hover, .fab-button:focus-visible {
+    background-color: var(--accent-cyan-light);
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 207, 232, 0.5);
+}
+.fab-button:active {
+    transform: scale(0.95);
+}
+.fab-button svg {
+    width: 28px;
+    height: 28px;
+}
+[data-theme="flip-clock"] .fab-button {
+    box-shadow: none;
+    border-radius: 16px;
+}
+
+/* Progress History Item */
+.progress-history-item {
+    background-color: var(--panel-bg-dark);
+    padding: 15px;
+    border-radius: 10px;
+    border: 1px solid var(--panel-border);
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s, transform 0.15s ease;
+}
+.progress-history-item:hover {
+    background-color: var(--item-bg-hover);
+    border-color: var(--item-border-hover);
+    transform: translateY(-2px);
+}
+.progress-history-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.progress-history-item-header h4 {
+    font-size: 1.1em;
+    color: var(--accent-purple);
+    font-weight: 500;
+}
+.progress-status {
+    font-size: 0.85em;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+}
+.progress-status-completed {
+    color: var(--accent-success);
+    background-color: rgba(127, 255, 212, 0.1);
+}
+.progress-status-incomplete {
+    color: var(--accent-red);
+    background-color: rgba(255, 107, 107, 0.1);
+}
+.progress-history-item .points-stat {
+    margin-top: 5px;
+    text-align: left;
+}
+
+
+/* Progress Editor Modal */
+#progress-editor-modal .modal-content {
+    max-width: 450px;
+}
+.progress-editor-form {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.progress-editor-form label {
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin-top: 10px;
+}
+.progress-editor-form .modal-input {
+    margin-bottom: 5px;
+}
+.progress-editor-form select.modal-input {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 30px;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23C5C1D6' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M2 5l6 6 6-6'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+    background-size: 1em;
+}
+
+/* Progress History Detail Modal */
+.progress-history-detail-content {
+    display: flex;
+    gap: 20px;
+    flex-grow: 1;
+    overflow: hidden;
+    margin-top: 15px;
+}
+.progress-history-detail-panel {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+#progress-history-calendar-view {
+    flex-basis: 45%;
+    flex-shrink: 0;
+    background-color: var(--panel-bg-dark);
+    padding: 15px;
+    border-radius: 10px;
+}
+#progress-history-daily-summary {
+    flex-grow: 1;
+}
+#progress-history-calendar-view .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: 8px;
+}
+#progress-history-calendar-view .calendar-day-cell {
+    aspect-ratio: 1;
+    font-size: 0.9em;
+    border-radius: 6px;
+    justify-content: center;
+}
+#progress-history-calendar-view .calendar-day-cell .calendar-day-fill {
+    height: 100%;
+    opacity: 0.3;
+    border-radius: 6px;
+}
+#progress-history-calendar-view .calendar-day-cell.selected {
+    border: 2px solid var(--accent-cyan);
+    box-shadow: var(--glow-cyan-soft);
+}
+
+.daily-summary-card {
+    background: var(--panel-bg-dark);
+    padding: 20px;
+    border-radius: 10px;
+}
+.daily-summary-card h4 {
+    font-size: 1.2em;
+    color: var(--accent-purple-light);
+    margin-bottom: 15px;
+}
+.daily-summary-card .points-stat, .daily-summary-card .progress-bar-container {
+    margin-bottom: 10px;
+}
+.daily-summary-tasks h5 {
+    font-size: 1em;
+    color: var(--text-secondary);
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+.daily-summary-tasks ul {
+    list-style: none;
+    padding-left: 0;
+}
+.daily-summary-tasks li {
+    padding: 5px;
+    color: var(--text-primary);
+    font-size: 0.9em;
+    border-bottom: 1px solid rgba(190, 147, 253, 0.08);
+}
+
 /* Utility Classes */
 .hidden { display: none !important; }
 .sr-only {
@@ -2025,6 +2401,16 @@ main#tab-content > section.hidden {
     
     .view-mode-medium { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
     .view-mode-large { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+
+    .progress-management-header h1 { font-size: 1.3em; }
+    
+    .progress-history-detail-content {
+        flex-direction: column;
+    }
+    #progress-history-calendar-view {
+        flex-basis: auto;
+        max-height: 250px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -2046,6 +2432,17 @@ main#tab-content > section.hidden {
 
     .view-mode-medium { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
     .view-mode-large { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+    .progress-tracker-item { flex-direction: column; align-items: stretch; }
+    
+    #progress-management-footer {
+        bottom: 15px;
+        right: 15px;
+    }
+    .fab-button {
+        width: 50px;
+        height: 50px;
+    }
 }
 
 @media (max-width: 900px) {
@@ -2054,15 +2451,36 @@ main#tab-content > section.hidden {
     }
 }
 
-/* Flip Clock Theme Specific Overrides */
+/* No-Animation Theme Overrides */
 [data-theme="flip-clock"] *,
 [data-theme="flip-clock"] *::before,
-[data-theme="flip-clock"] *::after {
+[data-theme="flip-clock"] *::after,
+[data-theme="power-safe"] *,
+[data-theme="power-safe"] *::before,
+[data-theme="power-safe"] *::after {
     transition: none !important;
     animation: none !important;
     animation-delay: 0s !important;
     animation-duration: 0s !important;
 }
+[data-theme="power-safe"] .item:hover,
+[data-theme="power-safe"] .item:focus-within,
+[data-theme="power-safe"] .calendar-day-cell:hover:not(.empty),
+[data-theme="power-safe"] .calendar-day-cell:focus-visible:not(.empty),
+[data-theme="power-safe"] .icon-button:hover,
+[data-theme="power-safe"] .icon-button:focus-visible,
+[data-theme="power-safe"] .modal-button:active, 
+[data-theme="power-safe"] .modal-button-primary:active,
+[data-theme="power-safe"] .fab-button:hover, 
+[data-theme="power-safe"] .fab-button:focus-visible,
+[data-theme="power-safe"] .fab-button:active,
+[data-theme="power-safe"] .close-button:hover,
+[data-theme="power-safe"] .close-button:focus-visible,
+[data-theme="power-safe"] .appearance-arrow,
+#appearance-menu-item-container.open [data-theme="power-safe"] .appearance-arrow {
+    transform: none !important;
+}
+
 
 [data-theme="flip-clock"] body {
     font-weight: 600;
@@ -2073,8 +2491,7 @@ main#tab-content > section.hidden {
 [data-theme="flip-clock"] #dashboard-column h2,
 [data-theme="flip-clock"] .dashboard-category-summary h3,
 [data-theme="flip-clock"] .folder-view-title,
-[data-theme="flip-clock"] #today-progress-container h3,
-[data-theme="flip-clock"] #current-week-progress-container h3,
+[data-theme="flip-clock"] .progress-container h3,
 [data-theme="flip-clock"] #daily-note-container h3,
 [data-theme="flip-clock"] .history-section-header h4,
 [data-theme="flip-clock"] .history-points-text,
@@ -2085,13 +2502,15 @@ main#tab-content > section.hidden {
 [data-theme="flip-clock"] .item,
 [data-theme="flip-clock"] #calendar-container,
 [data-theme="flip-clock"] #daily-note-container,
-[data-theme="flip-clock"] #today-progress-container,
-[data-theme="flip-clock"] #current-week-progress-container,
+[data-theme="flip-clock"] .progress-container,
 [data-theme="flip-clock"] .dashboard-category-summary,
 [data-theme="flip-clock"] .modal-content,
 [data-theme="flip-clock"] #left-column,
 [data-theme="flip-clock"] #dashboard-column,
-[data-theme="flip-clock"] .main-tab-intro {
+[data-theme="flip-clock"] .main-tab-intro,
+[data-theme="flip-clock"] #progress-management-view,
+[data-theme="flip-clock"] .progress-tracker-item,
+[data-theme="flip-clock"] .progress-history-item {
     border-radius: 20px;
     border: none;
     box-shadow: none;
@@ -2109,7 +2528,8 @@ main#tab-content > section.hidden {
 [data-theme="flip-clock"] .note-editor-header,
 [data-theme="flip-clock"] .task-list-header,
 [data-theme="flip-clock"] .add-checklist-item-form,
-[data-theme="flip-clock"] #history-modal-stats {
+[data-theme="flip-clock"] #history-modal-stats,
+[data-theme="flip-clock"] .progress-management-header {
     border-bottom: 1px solid #333;
 }
 [data-theme="flip-clock"] .add-checklist-item-form {
