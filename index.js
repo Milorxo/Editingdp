@@ -564,6 +564,7 @@ function loadCurrentDayNote() {
 }
 
 function saveDayToHistory(dateToSave) {
+    console.log(`[History] Saving full history for date: ${dateToSave}`);
     const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateToSave;
     const dailyTracker = progressTrackers.find(t => t.type === 'daily');
     const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
@@ -601,6 +602,8 @@ function saveDayToHistory(dateToSave) {
 
     localStorage.setItem(historyKey, JSON.stringify(historyEntry));
     
+    // Clear the individual task states for the day that has been archived.
+    console.log(`[History] Clearing individual task states for ${dateToSave}.`);
     currentCategories.forEach(cat => {
         if (!appContent[cat.id]) return;
         getAllTaskListFiles(appContent[cat.id]).forEach(taskList => {
@@ -610,7 +613,7 @@ function saveDayToHistory(dateToSave) {
         });
     });
     
-    console.log(`History finalized and individual task states cleared for ${dateToSave}.`);
+    console.log(`[History] Finalized and states cleared for ${dateToSave}.`);
 }
 
 
@@ -635,17 +638,25 @@ function loadAppData() {
 
   let lastVisitDateStr = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE);
   const currentDateStr = getTodayDateString();
+  console.log(`[App Load] Last visit: ${lastVisitDateStr}, Current date: ${currentDateStr}`);
 
   if (lastVisitDateStr && lastVisitDateStr !== currentDateStr) {
-    console.log(`Date changed from ${lastVisitDateStr} to ${currentDateStr}. Processing previous day.`);
-    saveDayToHistory(lastVisitDateStr);
+    console.log(`[App Load] New day detected. Archiving data for ${lastVisitDateStr}.`);
+    try {
+        saveDayToHistory(lastVisitDateStr);
+    } catch (e) {
+        console.error(`[Critical Error] Failed to save history for ${lastVisitDateStr}.`, e);
+        // We continue, as failing to save yesterday shouldn't block today.
+    }
   } else if (!lastVisitDateStr) {
-    console.log("First visit or no last visit date found. Initializing for today.");
+    console.log("[App Load] First visit or no last visit date found. Initializing for today.");
   }
   
   localStorage.setItem(STORAGE_KEY_LAST_VISIT_DATE, currentDateStr);
   
+  // Ensure today has a history entry if it's a new day or the entry is missing
   if ((lastVisitDateStr && lastVisitDateStr !== currentDateStr) || !localStorage.getItem(STORAGE_KEY_DAILY_HISTORY_PREFIX + currentDateStr)) {
+    console.log("[App Load] Creating or updating today's history entry.");
     updateTodaysHistoryEntry();
   }
 
@@ -662,29 +673,20 @@ function loadAppData() {
 }
 
 function handleMidnightReset() {
-    console.log("Midnight reset triggered.");
+    console.log("Midnight reset triggered. Saving previous day's state and reloading for a fresh start.");
     const dateThatJustEnded = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE); 
     
-    if (!dateThatJustEnded) {
-        console.error("Cannot perform midnight reset: last visit date unknown.");
-        scheduleMidnightTask(); 
-        return;
+    if (dateThatJustEnded) {
+        try {
+            saveDayToHistory(dateThatJustEnded);
+        } catch (e) {
+            console.error('[Midnight Reset] Failed to save history on reset.', e);
+        }
     }
 
-    saveDayToHistory(dateThatJustEnded);
-
-    const newCurrentDate = getTodayDateString();
-    localStorage.setItem(STORAGE_KEY_LAST_VISIT_DATE, newCurrentDate);
-    
-    updateTodaysHistoryEntry();
-
-    if (domElements.dailyNoteInput) domElements.dailyNoteInput.value = ''; 
-    loadCurrentDayNote();
-    
-    updateAllProgress();
-    archiveExpiredTrackers();
-    
-    scheduleMidnightTask(); 
+    // Force a full reload to ensure the app initializes cleanly for the new day.
+    // This is the most robust way to prevent state corruption from a background task.
+    window.location.reload();
 }
 
 function scheduleMidnightTask() {
@@ -1472,14 +1474,18 @@ function updateDashboardSummaries() {
 }
 
 function updateAllProgress() {
-  if (currentActiveViewId === 'main') {
-      renderMainProgressBars();
+  try {
+    if (currentActiveViewId === 'main') {
+        renderMainProgressBars();
+    }
+    if (currentActiveViewId === 'activity-dashboard') {
+      updateDashboardSummaries(); 
+    }
+    updateCategoryTabBadges();
+    renderCalendar(); 
+  } catch (error) {
+    console.error('[Critical Error] Failed during UI update in updateAllProgress(). App state might be inconsistent.', error);
   }
-  if (currentActiveViewId === 'activity-dashboard') {
-    updateDashboardSummaries(); 
-  }
-  updateCategoryTabBadges();
-  renderCalendar(); 
 }
 
 // --- CALENDAR & HISTORY FUNCTIONS ---
@@ -2398,6 +2404,10 @@ function getTrackerDateRange(tracker) {
 }
 
 function calculateProgressForTracker(tracker) {
+    if (!tracker || !tracker.type) {
+        console.error("calculateProgressForTracker called with invalid tracker:", tracker);
+        return { pointsEarned: 0, targetPoints: 0, percentage: 0 };
+    }
     const { startDate, endDate } = getTrackerDateRange(tracker);
     const today = getNormalizedDate(new Date());
     let totalPointsEarned = 0;
@@ -2632,154 +2642,162 @@ function renderAllCategorySections() {
 
 // Initialization function
 function initializeApp() {
-  // Query all DOM elements
-  for (const key in domElements) {
-    const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-    domElements[key] = document.getElementById(id);
-  }
-
-  loadAppData();
-  
-  const savedTheme = localStorage.getItem(STORAGE_KEY_THEME);
-  if (savedTheme && THEMES.map(t=>t.id).includes(savedTheme)) {
-      applyTheme(savedTheme);
-  } else {
-      applyTheme('original');
-  }
-
-  renderTabs();
-  renderAllCategorySections();
-  updateAllProgress();
-  showMainAppView();
-  
-  // Attach Event Listeners
-  domElements.saveNoteButton.addEventListener('click', saveDailyNote);
-  domElements.calendarPrevMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
-  domElements.calendarNextMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
-  domElements.historyModalCloseButton.addEventListener('click', closeHistoryModal);
-  
-  // Month/Year Picker
-  domElements.calendarMonthYearButton.addEventListener('click', toggleMonthYearPicker);
-  domElements.monthYearPickerCloseButton.addEventListener('click', closeMonthYearPicker);
-  domElements.monthYearPickerModal.addEventListener('click', (e) => {
-      if (!domElements.monthYearPickerContent.contains(e.target)) {
-          closeMonthYearPicker();
-      }
-  });
-
-  // History Modal Buttons
-  domElements.expandTasksButton.addEventListener('click', () => openFullscreenContentModal('tasks', currentModalDate));
-  domElements.expandReflectionButton.addEventListener('click', () => openFullscreenContentModal('reflection', currentModalDate));
-  domElements.saveHistoricalNoteButton.addEventListener('click', saveHistoricalNote);
-  domElements.clearHistoricalNoteButton.addEventListener('click', clearHistoricalNote);
-
-  // Fullscreen Modal
-  domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
-
-  // Delete Confirmation Modal
-  domElements.confirmDeleteButton.addEventListener('click', confirmDeletion);
-  domElements.cancelDeleteButton.addEventListener('click', hideDeleteConfirmation);
-  domElements.deleteConfirmationCloseButton.addEventListener('click', hideDeleteConfirmation);
-
-  // Category Creation Modals
-  domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
-  domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
-  domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
-  domElements.selectSpecialCategoryButton.addEventListener('click', () => handleSelectCategoryType('special'));
-  
-  // Name Entry Modal
-  domElements.nameEntryCloseButton.addEventListener('click', closeNameEntryModal);
-  domElements.cancelNameEntryButton.addEventListener('click', closeNameEntryModal);
-  domElements.confirmNameEntryButton.addEventListener('click', handleConfirmNameEntry);
-  domElements.nameEntryInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleConfirmNameEntry(); });
-  
-  // Category Context Menu
-  domElements.ctxRenameCategory.addEventListener('click', () => {
-      const categoryId = domElements.categoryTabContextMenu.dataset.categoryId;
-      const category = currentCategories.find(c => c.id === categoryId);
-      if(category) openNameEntryModal('rename_category', 'category', category);
-      hideCategoryContextMenu();
-  });
-  domElements.ctxDeleteCategory.addEventListener('click', () => {
-      const categoryId = domElements.categoryTabContextMenu.dataset.categoryId;
-      const category = currentCategories.find(c => c.id === categoryId);
-      if(category) showDeleteConfirmation('category', categoryId, `Are you sure you want to delete the category "${category.name}"? All its contents will be lost.`);
-      hideCategoryContextMenu();
-  });
-
-  // Hamburger Menu & Side Panel
-  domElements.hamburgerButton.addEventListener('click', toggleSidePanel);
-  domElements.sidePanelOverlay.addEventListener('click', toggleSidePanel);
-  domElements.menuMainView.addEventListener('click', () => { showMainAppView(); toggleSidePanel(); });
-  domElements.menuActivityDashboard.addEventListener('click', () => { showActivityDashboardView(); toggleSidePanel(); });
-  domElements.menuProgressManagement.addEventListener('click', () => { showProgressManagementView(); toggleSidePanel(); });
-  domElements.menuAppearance.addEventListener('click', toggleThemeDropdown);
-  
-  // Main Tab
-  domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
-
-  // Note Editor
-  domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
-  domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
-  domElements.imageUploadInput.addEventListener('change', (e) => {
-    if (e.target.files && e.target.files[0]) {
-      processAndInsertImage(e.target.files[0]);
+  console.log("[App Init] Initializing application...");
+  try {
+    // Query all DOM elements
+    for (const key in domElements) {
+      const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+      domElements[key] = document.getElementById(id);
     }
-  });
 
-  // Task List
-  domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
-  domElements.taskListEditButton.addEventListener('click', toggleTaskListEditMode);
-  domElements.taskListResetButton.addEventListener('click', handleResetTasks);
-  domElements.addChecklistItemForm.addEventListener('submit', handleAddChecklistItem);
-
-  // Progress Management
-  domElements.addNewProgressButton.addEventListener('click', () => openProgressEditorModal('create'));
-  domElements.progressEditorCloseButton.addEventListener('click', closeProgressEditorModal);
-  domElements.saveProgressButton.addEventListener('click', handleSaveProgressTracker);
-  domElements.progressTypeSelect.addEventListener('change', (e) => {
-      domElements.progressCustomDatesContainer.classList.toggle('hidden', e.target.value !== 'custom');
-  });
-  domElements.progressHistoryDetailCloseButton.addEventListener('click', closeProgressHistoryDetailModal);
-
-  // Global listeners
-  document.addEventListener('click', (e) => {
-    // Hide add action menu
-    const addActionContainer = document.querySelector('.add-action-container');
-    if (isAddActionMenuOpen && addActionContainer && !addActionContainer.contains(e.target)) {
-        isAddActionMenuOpen = false;
-        addActionContainer.classList.remove('open');
+    loadAppData();
+    
+    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME);
+    if (savedTheme && THEMES.map(t=>t.id).includes(savedTheme)) {
+        applyTheme(savedTheme);
+    } else {
+        applyTheme('original');
     }
-    // Hide view mode menu
-    const viewModeContainer = document.querySelector('.view-mode-container');
-    if (viewModeContainer && viewModeContainer.classList.contains('open') && !viewModeContainer.contains(e.target)) {
-        viewModeContainer.classList.remove('open');
-    }
-    // Hide context menus
-    if (domElements.categoryTabContextMenu && !domElements.categoryTabContextMenu.contains(e.target) && !e.target.closest('.tab-options-icon')) {
+
+    renderTabs();
+    renderAllCategorySections();
+    updateAllProgress();
+    showMainAppView();
+    
+    // Attach Event Listeners
+    domElements.saveNoteButton.addEventListener('click', saveDailyNote);
+    domElements.calendarPrevMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
+    domElements.calendarNextMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
+    domElements.historyModalCloseButton.addEventListener('click', closeHistoryModal);
+    
+    // Month/Year Picker
+    domElements.calendarMonthYearButton.addEventListener('click', toggleMonthYearPicker);
+    domElements.monthYearPickerCloseButton.addEventListener('click', closeMonthYearPicker);
+    domElements.monthYearPickerModal.addEventListener('click', (e) => {
+        if (!domElements.monthYearPickerContent.contains(e.target)) {
+            closeMonthYearPicker();
+        }
+    });
+
+    // History Modal Buttons
+    domElements.expandTasksButton.addEventListener('click', () => openFullscreenContentModal('tasks', currentModalDate));
+    domElements.expandReflectionButton.addEventListener('click', () => openFullscreenContentModal('reflection', currentModalDate));
+    domElements.saveHistoricalNoteButton.addEventListener('click', saveHistoricalNote);
+    domElements.clearHistoricalNoteButton.addEventListener('click', clearHistoricalNote);
+
+    // Fullscreen Modal
+    domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
+
+    // Delete Confirmation Modal
+    domElements.confirmDeleteButton.addEventListener('click', confirmDeletion);
+    domElements.cancelDeleteButton.addEventListener('click', hideDeleteConfirmation);
+    domElements.deleteConfirmationCloseButton.addEventListener('click', hideDeleteConfirmation);
+
+    // Category Creation Modals
+    domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
+    domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
+    domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
+    domElements.selectSpecialCategoryButton.addEventListener('click', () => handleSelectCategoryType('special'));
+    
+    // Name Entry Modal
+    domElements.nameEntryCloseButton.addEventListener('click', closeNameEntryModal);
+    domElements.cancelNameEntryButton.addEventListener('click', closeNameEntryModal);
+    domElements.confirmNameEntryButton.addEventListener('click', handleConfirmNameEntry);
+    domElements.nameEntryInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleConfirmNameEntry(); });
+    
+    // Category Context Menu
+    domElements.ctxRenameCategory.addEventListener('click', () => {
+        const categoryId = domElements.categoryTabContextMenu.dataset.categoryId;
+        const category = currentCategories.find(c => c.id === categoryId);
+        if(category) openNameEntryModal('rename_category', 'category', category);
         hideCategoryContextMenu();
-    }
-    if (itemContextMenu.element && !itemContextMenu.element.contains(e.target) && !e.target.closest('.item-more-options')) {
+    });
+    domElements.ctxDeleteCategory.addEventListener('click', () => {
+        const categoryId = domElements.categoryTabContextMenu.dataset.categoryId;
+        const category = currentCategories.find(c => c.id === categoryId);
+        if(category) showDeleteConfirmation('category', categoryId, `Are you sure you want to delete the category "${category.name}"? All its contents will be lost.`);
+        hideCategoryContextMenu();
+    });
+
+    // Hamburger Menu & Side Panel
+    domElements.hamburgerButton.addEventListener('click', toggleSidePanel);
+    domElements.sidePanelOverlay.addEventListener('click', toggleSidePanel);
+    domElements.menuMainView.addEventListener('click', () => { showMainAppView(); toggleSidePanel(); });
+    domElements.menuActivityDashboard.addEventListener('click', () => { showActivityDashboardView(); toggleSidePanel(); });
+    domElements.menuProgressManagement.addEventListener('click', () => { showProgressManagementView(); toggleSidePanel(); });
+    domElements.menuAppearance.addEventListener('click', toggleThemeDropdown);
+    
+    // Main Tab
+    domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
+
+    // Note Editor
+    domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
+    domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
+    domElements.imageUploadInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        processAndInsertImage(e.target.files[0]);
+      }
+    });
+
+    // Task List
+    domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
+    domElements.taskListEditButton.addEventListener('click', toggleTaskListEditMode);
+    domElements.taskListResetButton.addEventListener('click', handleResetTasks);
+    domElements.addChecklistItemForm.addEventListener('submit', handleAddChecklistItem);
+
+    // Progress Management
+    domElements.addNewProgressButton.addEventListener('click', () => openProgressEditorModal('create'));
+    domElements.progressEditorCloseButton.addEventListener('click', closeProgressEditorModal);
+    domElements.saveProgressButton.addEventListener('click', handleSaveProgressTracker);
+    domElements.progressTypeSelect.addEventListener('change', (e) => {
+        domElements.progressCustomDatesContainer.classList.toggle('hidden', e.target.value !== 'custom');
+    });
+    domElements.progressHistoryDetailCloseButton.addEventListener('click', closeProgressHistoryDetailModal);
+
+    // Global listeners
+    document.addEventListener('click', (e) => {
+      // Hide add action menu
+      const addActionContainer = document.querySelector('.add-action-container');
+      if (isAddActionMenuOpen && addActionContainer && !addActionContainer.contains(e.target)) {
+          isAddActionMenuOpen = false;
+          addActionContainer.classList.remove('open');
+      }
+      // Hide view mode menu
+      const viewModeContainer = document.querySelector('.view-mode-container');
+      if (viewModeContainer && viewModeContainer.classList.contains('open') && !viewModeContainer.contains(e.target)) {
+          viewModeContainer.classList.remove('open');
+      }
+      // Hide context menus
+      if (domElements.categoryTabContextMenu && !domElements.categoryTabContextMenu.contains(e.target) && !e.target.closest('.tab-options-icon')) {
+          hideCategoryContextMenu();
+      }
+      if (itemContextMenu.element && !itemContextMenu.element.contains(e.target) && !e.target.closest('.item-more-options')) {
+          hideItemContextMenu();
+      }
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (domElements.sidePanelMenu.classList.contains('open')) { toggleSidePanel(); }
+        else if (!domElements.historyModal.classList.contains('hidden')) { closeHistoryModal(); }
+        else if (!domElements.monthYearPickerModal.classList.contains('hidden')) { closeMonthYearPicker(); }
+        else if (!domElements.deleteConfirmationModal.classList.contains('hidden')) { hideDeleteConfirmation(); }
+        else if (!domElements.fullscreenContentModal.classList.contains('hidden')) { closeFullscreenContentModal(); }
+        else if (!domElements.nameEntryModal.classList.contains('hidden')) { closeNameEntryModal(); }
+        else if (!domElements.chooseCategoryTypeModal.classList.contains('hidden')) { closeChooseCategoryTypeModal(); }
+        else if (!domElements.noteEditorModal.classList.contains('hidden')) { closeNoteEditorModal(); }
+        else if (!domElements.taskListModal.classList.contains('hidden')) { closeTaskListModal(); }
+        else if (!domElements.progressEditorModal.classList.contains('hidden')) { closeProgressEditorModal(); }
+        else if (!domElements.progressHistoryDetailModal.classList.contains('hidden')) { closeProgressHistoryDetailModal(); }
+        hideCategoryContextMenu();
         hideItemContextMenu();
-    }
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (domElements.sidePanelMenu.classList.contains('open')) { toggleSidePanel(); }
-      else if (!domElements.historyModal.classList.contains('hidden')) { closeHistoryModal(); }
-      else if (!domElements.monthYearPickerModal.classList.contains('hidden')) { closeMonthYearPicker(); }
-      else if (!domElements.deleteConfirmationModal.classList.contains('hidden')) { hideDeleteConfirmation(); }
-      else if (!domElements.fullscreenContentModal.classList.contains('hidden')) { closeFullscreenContentModal(); }
-      else if (!domElements.nameEntryModal.classList.contains('hidden')) { closeNameEntryModal(); }
-      else if (!domElements.chooseCategoryTypeModal.classList.contains('hidden')) { closeChooseCategoryTypeModal(); }
-      else if (!domElements.noteEditorModal.classList.contains('hidden')) { closeNoteEditorModal(); }
-      else if (!domElements.taskListModal.classList.contains('hidden')) { closeTaskListModal(); }
-      else if (!domElements.progressEditorModal.classList.contains('hidden')) { closeProgressEditorModal(); }
-      else if (!domElements.progressHistoryDetailModal.classList.contains('hidden')) { closeProgressHistoryDetailModal(); }
-      hideCategoryContextMenu();
-      hideItemContextMenu();
-    }
-  });
+      }
+    });
+    console.log("[App Init] Application initialized successfully.");
+  } catch (error) {
+    console.error("[Critical Error] Application failed to initialize.", error);
+    // Optionally display a user-friendly error message on the screen
+    document.body.innerHTML = '<div style="color: white; padding: 20px;">A critical error occurred. Please try clearing your cache or contact support.</div>';
+  }
 }
 
 document.addEventListener('DOMContentLoaded', initializeApp);
