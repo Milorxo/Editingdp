@@ -24,30 +24,28 @@ const DEFAULT_CATEGORIES_CONFIG = [
 ];
 
 
-const DAILY_TARGET_POINTS = 2700;
-const TARGET_POINTS_FOR_WEEKLY_VIEW = 20000;
-
 // Keys
 const STORAGE_KEY_LAST_VISIT_DATE = 'lifeTrackerLastVisitDate';
 const STORAGE_KEY_DAILY_NOTE_PREFIX = 'lifeTrackerDailyNote_'; 
 const STORAGE_KEY_DAILY_HISTORY_PREFIX = 'lifeTrackerHistory_';
 const STORAGE_KEY_LAST_MONTH_PROCESSED = 'lifeTrackerLastMonthProcessed';
-const STORAGE_KEY_CURRENT_WEEK_START_DATE = 'lifeTrackerCurrentWeekStartDate'; 
 const USER_CATEGORIES_KEY = 'lifeTrackerUserCategories_v2'; 
 const APP_CONTENT_KEY = 'lifeTrackerAppContent_v1'; // Hierarchical content structure
 const CHECKLIST_ITEM_STATE_KEY_PREFIX = 'lifeTrackerChecklistState_';
 const STORAGE_KEY_VIEW_MODE = 'lifeTrackerViewMode';
 const STORAGE_KEY_THEME = 'lifeTrackerTheme';
+const STORAGE_KEY_PROGRESS_TRACKERS = 'lifeTrackerProgressTrackers_v1';
 
 let currentCategories = []; 
 let appContent = {}; // Main data structure for all items (folders, notes, tasks)
+let progressTrackers = [];
 
 let activeTabId = 'dashboard'; 
 let currentModalDate = null; 
 let itemToDelete = null; 
 let currentPath = []; // Breadcrumb path: [{ id, name, type }, ...]
 let currentViewMode = 'medium'; // 'large', 'medium', 'detail'
-let currentTheme = 'original'; // 'original', 'flip-clock'
+let currentTheme = 'original'; // 'original', 'flip-clock', 'power-safe'
 let isAddActionMenuOpen = false;
 let calendarDisplayDate = new Date();
 let isMonthYearPickerOpen = false;
@@ -60,44 +58,46 @@ let currentContextMenuTargetTab = null;
 let itemContextMenu = { element: null, target: null };
 let midnightTimer = null;
 let tempItemCreationData = null;
-let currentActiveViewId = 'main'; // 'main', 'activity-dashboard'
+let currentActiveViewId = 'main'; // 'main', 'activity-dashboard', 'progress-management'
 let currentlyEditingNote = null; // { id, name, content }
 let currentlyEditingTaskList = null; // The task list being managed in the modal
 let isTaskListEditMode = false;
 let draggedItemId = null; // ID of the item being dragged
+let currentlyEditingProgressTrackerId = null;
+let activeProgressDetailTracker = null;
 
 // DOM Elements
 const domElements = {
+  // Main Views
+  appViewWrapper: null,
+  progressManagementView: null,
+  
   // Hamburger Menu & Side Panel
   hamburgerButton: null,
   sidePanelMenu: null,
   sidePanelOverlay: null,
   menuMainView: null, 
   menuActivityDashboard: null,
+  menuProgressManagement: null,
   menuAppearance: null,
+  appearanceMenuItemContainer: null,
+  themeDropdownContainer: null,
   
-  appViewWrapper: null, 
   mainContentWrapper: null, 
-  dashboardColumnView: null, 
+  dashboardColumn: null, 
   dashboardTabButton: null,
 
   mobileProgressLocation: null,
 
-  tabsContainer: null,
-  tabContentsContainer: null, 
+  tabs: null,
+  tabContent: null, 
   addCategoryButton: null,
   categorySectionTemplate: null, 
   categoryTabContextMenu: null,
-  ctxRenameCategoryButton: null,
-  ctxDeleteCategoryButton: null,
+  ctxRenameCategory: null,
+  ctxDeleteCategory: null,
   
-  dashboardSummariesContainer: null,
-  todayProgressFill: null,
-  todayPointsStat: null,
-  currentWeekProgressFill: null,
-  currentWeekPointsStat: null,
-  todayProgressContainer: null, 
-  currentWeekProgressContainer: null, 
+  dashboardSummaries: null,
   calendarMonthYearButton: null,
   calendarMonthYear: null,
   calendarGrid: null,
@@ -142,12 +142,6 @@ const domElements = {
   chooseCategoryTypeCloseButton: null,
   selectStandardCategoryButton: null,
   selectSpecialCategoryButton: null,
-
-  // Theme Choice Modal
-  themeChoiceModal: null,
-  themeChoiceCloseButton: null,
-  selectOriginalThemeButton: null,
-  selectFlipClockThemeButton: null,
   
   // Name Entry Modal
   nameEntryModal: null,
@@ -175,6 +169,27 @@ const domElements = {
   addChecklistItemForm: null,
   addChecklistItemInput: null,
 
+  // Progress Management
+  progressManagementList: null,
+  activeProgressList: null,
+  archivedProgressList: null,
+  addNewProgressButton: null,
+  progressEditorModal: null,
+  progressEditorCloseButton: null,
+  progressEditorTitle: null,
+  progressNameInput: null,
+  progressTargetInput: null,
+  progressTypeSelect: null,
+  progressCustomDatesContainer: null,
+  progressStartDate: null,
+  progressEndDate: null,
+  saveProgressButton: null,
+  progressHistoryDetailModal: null,
+  progressHistoryDetailCloseButton: null,
+  progressHistoryDetailTitle: null,
+  progressHistoryCalendarView: null,
+  progressHistoryDailySummary: null,
+
   imageUploadInput: null,
 };
 
@@ -185,6 +200,16 @@ function getProgressFillColor(percentage) {
     const p = Math.max(0, Math.min(100, percentage));
     const hue = (p / 100) * 120; // 0 = red, 120 = green
     return `hsl(${hue}, 100%, 50%)`;
+}
+
+function getProgressGradient(percentage) {
+    if (currentTheme === 'flip-clock' || currentTheme === 'power-safe') {
+        return getProgressFillColor(percentage);
+    }
+    const p = Math.max(0, Math.min(100, percentage));
+    const midPoint = Math.max(5, Math.min(95, p));
+    const color = getProgressFillColor(p);
+    return `linear-gradient(90deg, #ff6b6b 0%, #ffd700 ${midPoint}%, ${color} 100%)`;
 }
 
 function getTodayDateString() {
@@ -229,8 +254,10 @@ function getAllTaskListFiles(items) {
 function updateTodaysHistoryEntry() {
     const today = getTodayDateString();
     const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + today;
+    const dailyTracker = progressTrackers.find(t => t.type === 'daily');
+    const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
 
-    const progressStandardOnly = calculateProgressForDate(today, true);
+    const progressStandardOnly = calculateProgressForDate(today, true, dailyTarget);
     
     const completedTasksTodayStruct = {}; 
     currentCategories.forEach(cat => {
@@ -263,7 +290,7 @@ function updateTodaysHistoryEntry() {
         pointsEarned: progressStandardOnly.pointsEarned,
         percentageCompleted: progressStandardOnly.percentage,
         totalTasksOnDate: progressStandardOnly.totalStandardTasks,
-        dailyTargetPoints: DAILY_TARGET_POINTS
+        dailyTargetPoints: dailyTarget
     };
 
     localStorage.setItem(historyKey, JSON.stringify(historyEntry));
@@ -318,6 +345,29 @@ function loadAppContent() {
 
 function saveAppContent() {
     localStorage.setItem(APP_CONTENT_KEY, JSON.stringify(appContent));
+}
+
+function loadProgressTrackers() {
+    const storedTrackers = localStorage.getItem(STORAGE_KEY_PROGRESS_TRACKERS);
+    if (storedTrackers) {
+        try {
+            progressTrackers = JSON.parse(storedTrackers);
+            return;
+        } catch (e) {
+            console.error("Error parsing progress trackers:", e);
+        }
+    }
+    
+    // If no trackers, create defaults
+    progressTrackers = [
+        { id: 'progress-daily', name: "Today's Progress", type: 'daily', targetPoints: 2700, isDefault: true, order: 0 },
+        { id: 'progress-weekly', name: "Weekly Progress", type: 'weekly', targetPoints: 20000, isDefault: true, order: 1 }
+    ];
+    saveProgressTrackers();
+}
+
+function saveProgressTrackers() {
+    localStorage.setItem(STORAGE_KEY_PROGRESS_TRACKERS, JSON.stringify(progressTrackers));
 }
 
 function migrateTaskFilesToTaskList() {
@@ -384,6 +434,7 @@ function migrateTaskFilesToTaskList() {
 function seedInitialDataIfNeeded() {
     currentCategories = loadUserCategories();
     appContent = loadAppContent();
+    loadProgressTrackers();
 
     let categoriesUpdated = false;
     let contentUpdated = false;
@@ -514,8 +565,10 @@ function loadCurrentDayNote() {
 
 function saveDayToHistory(dateToSave) {
     const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateToSave;
+    const dailyTracker = progressTrackers.find(t => t.type === 'daily');
+    const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
     
-    const { pointsEarned, percentage, totalStandardTasks } = calculateProgressForDate(dateToSave, true);
+    const { pointsEarned, percentage, totalStandardTasks } = calculateProgressForDate(dateToSave, true, dailyTarget);
     
     const completedTasksHistory = {}; 
     currentCategories.forEach(cat => {
@@ -543,7 +596,7 @@ function saveDayToHistory(dateToSave) {
         pointsEarned: pointsEarned,
         percentageCompleted: percentage,
         totalTasksOnDate: totalStandardTasks,
-        dailyTargetPoints: DAILY_TARGET_POINTS
+        dailyTargetPoints: dailyTarget
     };
 
     localStorage.setItem(historyKey, JSON.stringify(historyEntry));
@@ -552,7 +605,7 @@ function saveDayToHistory(dateToSave) {
         if (!appContent[cat.id]) return;
         getAllTaskListFiles(appContent[cat.id]).forEach(taskList => {
             (taskList.content || []).forEach(checklistItem => {
-                localStorage.removeItem(getChecklistItemStateStorageKey(dateToSave, checklistItem.id));
+                localStorage.removeItem(getChecklistItemStateStorageKey(dateToSave, checklistItemId));
             });
         });
     });
@@ -596,7 +649,8 @@ function loadAppData() {
     updateTodaysHistoryEntry();
   }
 
-  checkAndClearOldMonthlyData(); 
+  checkAndClearOldMonthlyData();
+  archiveExpiredTrackers();
   loadCurrentDayNote(); 
   
   calendarDisplayDate = new Date(); 
@@ -626,16 +680,9 @@ function handleMidnightReset() {
 
     if (domElements.dailyNoteInput) domElements.dailyNoteInput.value = ''; 
     loadCurrentDayNote();
-
-    if (domElements.todayPointsStat) domElements.todayPointsStat.classList.add('progress-value-resetting');
-    if (domElements.todayProgressFill) domElements.todayProgressFill.classList.add('progress-value-resetting');
     
     updateAllProgress();
-
-    setTimeout(() => {
-        if (domElements.todayPointsStat) domElements.todayPointsStat.classList.remove('progress-value-resetting');
-        if (domElements.todayProgressFill) domElements.todayProgressFill.classList.remove('progress-value-resetting');
-    }, 500); 
+    archiveExpiredTrackers();
     
     scheduleMidnightTask(); 
 }
@@ -654,7 +701,12 @@ function scheduleMidnightTask() {
 function showDeleteConfirmation(type, id, message, nameForConfirmation = '') {
     const found = findItemAndParent(id);
     const parentId = found?.parent?.id;
-    itemToDelete = { type, id, nameForConfirmation, parentId };
+
+    if (type === 'progressTracker') {
+         itemToDelete = { type, id };
+    } else {
+        itemToDelete = { type, id, nameForConfirmation, parentId };
+    }
     
     if (domElements.deleteConfirmationModal) {
         domElements.deleteConfirmationModal.classList.add('opening');
@@ -672,9 +724,7 @@ function confirmDeletion() {
         const itemEl = document.querySelector(`.item[data-item-id="${itemId}"]`);
         if (itemEl) {
             itemEl.classList.add('leaving');
-            itemEl.addEventListener('animationend', () => {
-                itemEl.remove();
-            });
+            itemEl.addEventListener('animationend', () => itemEl.remove());
         } else {
              renderCategorySectionContent(currentPath[0].id);
         }
@@ -695,6 +745,11 @@ function confirmDeletion() {
             document.getElementById(`category-section-${categoryId}`)?.remove();
             if (activeTabId === categoryId) switchTab('dashboard');
         }
+    } else if (itemToDelete.type === 'progressTracker') {
+        progressTrackers = progressTrackers.filter(t => t.id !== itemToDelete.id);
+        saveProgressTrackers();
+        renderProgressManagementList();
+        renderMainProgressBars();
     } else { // Item is a folder, note, or tasklist
         const found = findItemAndParent(itemToDelete.id);
         if (found) {
@@ -1189,8 +1244,8 @@ function handleAddChecklistItem(e) {
 
 
 function renderTabs() {
-    if (!domElements.tabsContainer) return;
-    domElements.tabsContainer.querySelectorAll('.tab-button[data-category-id]').forEach(btn => btn.remove());
+    if (!domElements.tabs) return;
+    domElements.tabs.querySelectorAll('.tab-button[data-category-id]').forEach(btn => btn.remove());
     const addCatButton = domElements.addCategoryButton;
 
     currentCategories.sort((a, b) => a.order - b.order).forEach(category => {
@@ -1215,10 +1270,10 @@ function renderTabs() {
 
         const optionsIcon = document.createElement('div');
         optionsIcon.className = 'tab-options-icon';
-        optionsIcon.innerHTML = `<span></span><span></span><span></span>`;
         optionsIcon.setAttribute('aria-label', `Options for ${category.name}`);
         optionsIcon.setAttribute('role', 'button');
         optionsIcon.tabIndex = 0; 
+        optionsIcon.innerHTML = `<span></span><span></span><span></span>`;
         tabButton.appendChild(optionsIcon);
         
         optionsIcon.addEventListener('click', (e) => { 
@@ -1266,30 +1321,61 @@ function renderTabs() {
             switchTab(category.id);
         });
         if (addCatButton) {
-            domElements.tabsContainer.insertBefore(tabButton, addCatButton);
+            domElements.tabs.insertBefore(tabButton, addCatButton);
         } else {
-            domElements.tabsContainer.appendChild(tabButton);
+            domElements.tabs.appendChild(tabButton);
         }
     });
     updateCategoryTabIndicators();
 }
 
+function updateCategoryTabIndicators() {
+    const today = getTodayDateString();
+    if (!domElements.tabs) return;
+
+    currentCategories.forEach(category => {
+        const tabButton = domElements.tabs.querySelector(`#tab-button-${category.id}`);
+        if (!tabButton || category.type !== 'standard') {
+            if (tabButton) {
+                tabButton.classList.remove('category-complete-indicator');
+            }
+            return;
+        }
+        
+        const allCategoryTaskLists = appContent[category.id] ? getAllTaskListFiles(appContent[category.id]) : [];
+        
+        let totalItems = 0;
+        let completedItems = 0;
+
+        allCategoryTaskLists.forEach(tl => {
+            const checklistItems = tl.content || [];
+            totalItems += checklistItems.length;
+            completedItems += checklistItems.filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(today, ci.id)) === 'true').length;
+        });
+
+        if (totalItems > 0 && completedItems === totalItems) {
+            tabButton.classList.add('category-complete-indicator');
+        } else {
+            tabButton.classList.remove('category-complete-indicator');
+        }
+    });
+}
 
 function switchTab(categoryIdToActivate) {
     activeTabId = categoryIdToActivate;
     hideCategoryContextMenu();
 
-    if (domElements.tabsContainer) {
-        domElements.tabsContainer.querySelectorAll('.tab-button').forEach(button => {
+    if (domElements.tabs) {
+        domElements.tabs.querySelectorAll('.tab-button').forEach(button => {
             const isCurrentActive = (button.id === `tab-button-${activeTabId}`) || (activeTabId === 'dashboard' && button.id === 'dashboard-tab-button');
             button.classList.toggle('active', isCurrentActive);
             button.setAttribute('aria-selected', isCurrentActive.toString());
         });
     }
 
-    if (domElements.tabContentsContainer) {
-        domElements.tabContentsContainer.classList.toggle('main-area-scroll-hidden', categoryIdToActivate === 'dashboard');
-        domElements.tabContentsContainer.querySelectorAll('section[role="tabpanel"]').forEach(section => {
+    if (domElements.tabContent) {
+        domElements.tabContent.classList.toggle('main-area-scroll-hidden', categoryIdToActivate === 'dashboard');
+        domElements.tabContent.querySelectorAll('section[role="tabpanel"]').forEach(section => {
             const isCurrentActiveSection = (section.id === `category-section-${activeTabId}`) || (activeTabId === 'dashboard' && section.id === 'dashboard-content');
             section.classList.toggle('hidden', !isCurrentActiveSection);
         });
@@ -1304,7 +1390,7 @@ function switchTab(categoryIdToActivate) {
     }
 }
 
-function calculateProgressForDate(dateString, standardOnlyStats = false) {
+function calculateProgressForDate(dateString, standardOnlyStats = false, targetPoints) {
   let completedCount = 0;
   let totalChecklistItemsForCalc = 0;
   let totalStandardChecklistItemsCount = 0;
@@ -1333,8 +1419,8 @@ function calculateProgressForDate(dateString, standardOnlyStats = false) {
     });
   });
 
-  const percentage = totalChecklistItemsForCalc > 0 ? Math.round((completedCount / totalChecklistItemsForCalc) * 100) : 0;
-  const pointsPerTask = totalStandardChecklistItemsCount > 0 ? DAILY_TARGET_POINTS / totalStandardChecklistItemsCount : 0;
+  const percentage = totalStandardChecklistItemsCount > 0 ? Math.round((completedCount / totalStandardChecklistItemsCount) * 100) : 0;
+  const pointsPerTask = totalStandardChecklistItemsCount > 0 ? targetPoints / totalStandardChecklistItemsCount : 0;
   const pointsEarned = Math.round(completedCount * pointsPerTask);
   
   return { 
@@ -1344,424 +1430,360 @@ function calculateProgressForDate(dateString, standardOnlyStats = false) {
 }
 
 function updateDashboardSummaries() {
-  if (!domElements.dashboardSummariesContainer) return;
-  domElements.dashboardSummariesContainer.innerHTML = '';
-  const today = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE) || getTodayDateString();
+    if (!domElements.dashboardSummaries) return;
+    domElements.dashboardSummaries.innerHTML = '';
+    const today = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE) || getTodayDateString();
 
-  currentCategories.forEach(category => {
-    if (category.id === 'dashboard' || category.type === 'special') return;
-    
-    const allCategoryTaskLists = appContent[category.id] ? getAllTaskListFiles(appContent[category.id]) : [];
-    let totalItems = 0;
-    let completedItems = 0;
-    allCategoryTaskLists.forEach(tl => {
-        const checklistItems = tl.content || [];
-        totalItems += checklistItems.length;
-        completedItems += checklistItems.filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(today, ci.id)) === 'true').length;
+    currentCategories.forEach(category => {
+        if (category.id === 'dashboard') return;
+
+        const allCategoryTaskLists = appContent[category.id] ? getAllTaskListFiles(appContent[category.id]) : [];
+        let totalItems = 0;
+        let completedItems = 0;
+        allCategoryTaskLists.forEach(tl => {
+            const checklistItems = tl.content || [];
+            totalItems += checklistItems.length;
+            completedItems += checklistItems.filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(today, ci.id)) === 'true').length;
+        });
+
+        const percentage = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'dashboard-category-summary';
+
+        summaryDiv.innerHTML = `
+            <h3>${category.name}</h3>
+            <p class="category-stats">${completedItems} / ${totalItems}</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill"></div>
+            </div>
+        `;
+
+        const fillEl = summaryDiv.querySelector('.progress-bar-fill');
+        fillEl.style.width = `${percentage}%`;
+
+        if (currentTheme === 'original') {
+            fillEl.style.backgroundImage = getProgressGradient(percentage);
+        } else {
+            fillEl.style.backgroundColor = getProgressFillColor(percentage);
+        }
+
+        if (totalItems > 0 && completedItems === totalItems) {
+            summaryDiv.querySelector('.category-stats').classList.add('fully-completed');
+        }
+
+        domElements.dashboardSummaries.appendChild(summaryDiv);
     });
-
-    const summaryDiv = document.createElement('div');
-    summaryDiv.className = 'dashboard-category-summary';
-    summaryDiv.innerHTML = `<h3>${category.name}</h3><p class="category-stats">${completedItems} / ${totalItems}</p>`;
-    if (totalItems > 0 && completedItems === totalItems) {
-        summaryDiv.querySelector('.category-stats').classList.add('fully-completed');
-    }
-    domElements.dashboardSummariesContainer.appendChild(summaryDiv);
-  });
 }
 
-function updateTodaysProgress() {
-  const today = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE) || getTodayDateString();
-  const progress = calculateProgressForDate(today, true);
-  
-  if (domElements.todayProgressFill) {
-      domElements.todayProgressFill.style.width = `${progress.percentage}%`;
-      domElements.todayProgressFill.style.backgroundColor = getProgressFillColor(progress.percentage);
-      domElements.todayProgressFill.textContent = `${progress.percentage}%`;
-      domElements.todayProgressFill.setAttribute('aria-valuenow', progress.percentage.toString());
+function updateAllProgress() {
+  if (currentActiveViewId === 'main') {
+      renderMainProgressBars();
   }
-  if (domElements.todayPointsStat) {
-      domElements.todayPointsStat.textContent = `${progress.pointsEarned} / ${DAILY_TARGET_POINTS} points`;
+  if (currentActiveViewId === 'activity-dashboard') {
+    updateDashboardSummaries(); 
   }
+  updateCategoryTabIndicators();
+  renderCalendar(); 
 }
 
-function updateCurrentWeekProgress() {
-    const todayNormalized = getNormalizedDate(new Date());
-    let currentWeekStartDateString = localStorage.getItem(STORAGE_KEY_CURRENT_WEEK_START_DATE);
-    let currentWeekStartDate;
-
-    if (!currentWeekStartDateString) {
-        currentWeekStartDate = new Date(todayNormalized); 
-        localStorage.setItem(STORAGE_KEY_CURRENT_WEEK_START_DATE, currentWeekStartDate.toISOString().split('T')[0]);
-    } else {
-        currentWeekStartDate = getNormalizedDate(new Date(currentWeekStartDateString));
-        if ((todayNormalized.getTime() - currentWeekStartDate.getTime()) / (1000 * 60 * 60 * 24) >= 7) { 
-            currentWeekStartDate = new Date(todayNormalized); 
-            let dayOfWeek = todayNormalized.getDay(); 
-            let diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek; 
-            currentWeekStartDate.setDate(todayNormalized.getDate() + diffToMonday);
-            currentWeekStartDate = getNormalizedDate(currentWeekStartDate); 
-            localStorage.setItem(STORAGE_KEY_CURRENT_WEEK_START_DATE, currentWeekStartDate.toISOString().split('T')[0]);
-        }
-    }
-    
-    let totalPointsThisWeekCycle = 0;
-    let currentDateIter = new Date(currentWeekStartDate); 
-    const todayDateStringForLoop = getTodayDateString();
-
-    while (currentDateIter <= todayNormalized) {
-        const dateStringForIter = `${currentDateIter.getFullYear()}-${(currentDateIter.getMonth() + 1).toString().padStart(2, '0')}-${currentDateIter.getDate().toString().padStart(2, '0')}`;
-        let pointsForDay = 0;
-        if (dateStringForIter === todayDateStringForLoop) {
-            pointsForDay = calculateProgressForDate(dateStringForIter, true).pointsEarned;
-        } else { 
-            const historyDataString = localStorage.getItem(STORAGE_KEY_DAILY_HISTORY_PREFIX + dateStringForIter);
-            if (historyDataString) {
-                try { pointsForDay = JSON.parse(historyDataString).pointsEarned || 0; } catch (e) { /* ignore */ }
-            }
-        }
-        totalPointsThisWeekCycle += pointsForDay;
-        currentDateIter.setDate(currentDateIter.getDate() + 1);
-    }
-
-    const weeklyCyclePercentage = TARGET_POINTS_FOR_WEEKLY_VIEW > 0 ? Math.min(100, Math.round((totalPointsThisWeekCycle / TARGET_POINTS_FOR_WEEKLY_VIEW) * 100)) : 0;
-
-    if (domElements.currentWeekProgressFill) {
-        domElements.currentWeekProgressFill.style.width = `${weeklyCyclePercentage}%`;
-        domElements.currentWeekProgressFill.style.backgroundColor = getProgressFillColor(weeklyCyclePercentage);
-        domElements.currentWeekProgressFill.textContent = `${weeklyCyclePercentage}%`;
-        domElements.currentWeekProgressFill.setAttribute('aria-valuenow', weeklyCyclePercentage.toString());
-    }
-    if (domElements.currentWeekPointsStat) {
-        domElements.currentWeekPointsStat.textContent = `${totalPointsThisWeekCycle} / ${TARGET_POINTS_FOR_WEEKLY_VIEW} points`;
-    }
-}
-
+// --- CALENDAR & HISTORY FUNCTIONS ---
 
 function renderCalendar() {
-  if (!domElements.calendarGrid || !domElements.calendarMonthYear) return;
-  domElements.calendarGrid.innerHTML = ''; 
-  const month = calendarDisplayDate.getMonth();
-  const year = calendarDisplayDate.getFullYear();
-  domElements.calendarMonthYear.textContent = `${calendarDisplayDate.toLocaleString('default', { month: 'long' })} ${year}`;
+    if (!domElements.calendarGrid || !domElements.calendarMonthYear) return;
 
-  const firstDayOfMonth = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const startingDayOfWeek = firstDayOfMonth.getDay(); 
-  const todayNorm = getNormalizedDate(new Date());
-  const todayDateStr = getTodayDateString();
+    domElements.calendarGrid.innerHTML = '';
 
-  ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].forEach(dayName => {
-    const dayHeader = document.createElement('div');
-    dayHeader.className = 'calendar-day-header';
-    dayHeader.textContent = dayName;
-    domElements.calendarGrid.appendChild(dayHeader);
-  });
-
-  for (let i = 0; i < startingDayOfWeek; i++) {
-    domElements.calendarGrid.appendChild(document.createElement('div')).className = 'calendar-day-cell empty';
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const cellDate = getNormalizedDate(new Date(year, month, day));
-    const dateString = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    const cell = document.createElement('div');
-    cell.className = 'calendar-day-cell';
-    cell.dataset.date = dateString;
-    cell.innerHTML = `<span class="calendar-day-number">${day}</span><div class="calendar-day-fill"></div>`;
+    const monthName = calendarDisplayDate.toLocaleString('default', { month: 'long' });
+    const year = calendarDisplayDate.getFullYear();
+    domElements.calendarMonthYear.textContent = `${monthName} ${year}`;
     
-    let percentageCompleted = 0;
-    let hasHistoryData = false; 
-    const fillDiv = cell.querySelector('.calendar-day-fill');
+    // Day headers
+    const dayHeaders = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    dayHeaders.forEach(day => {
+        const headerEl = document.createElement('div');
+        headerEl.className = 'calendar-day-header';
+        headerEl.textContent = day;
+        domElements.calendarGrid.appendChild(headerEl);
+    });
 
-    if (dateString === todayDateStr) { 
-        cell.classList.add('current-day');
-        const progress = calculateProgressForDate(dateString, true);
-        percentageCompleted = progress.percentage;
-        const anyTaskProgress = calculateProgressForDate(dateString, false);
-        hasHistoryData = anyTaskProgress.completedCount > 0 || !!localStorage.getItem(STORAGE_KEY_DAILY_NOTE_PREFIX + dateString);
-    } else { 
-        const historyDataString = localStorage.getItem(STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString);
-        if (historyDataString) { 
-            try {
-                const historyEntry = JSON.parse(historyDataString);
-                percentageCompleted = historyEntry.percentageCompleted || 0;
-                hasHistoryData = (historyEntry.completedTaskStructure && Object.values(historyEntry.completedTaskStructure).some(cat => cat.tasks && cat.tasks.length > 0)) || !!historyEntry.userNote;
-            } catch(e) { /* ignore */ }
+    const today = getNormalizedDate(new Date());
+    const month = calendarDisplayDate.getMonth();
+    
+    const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0=Sun, 1=Mon...
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+    // Empty cells for padding
+    for (let i = 0; i < firstDayOfWeek; i++) {
+        const emptyCell = document.createElement('div');
+        emptyCell.className = 'calendar-day-cell empty';
+        domElements.calendarGrid.appendChild(emptyCell);
+    }
+
+    // Day cells
+    for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell';
+        
+        const cellDate = getNormalizedDate(new Date(year, month, day));
+        const dateString = `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+        cell.innerHTML = `<span class="calendar-day-number">${day}</span><div class="calendar-day-fill"></div>`;
+        
+        if (cellDate.getTime() === today.getTime()) {
+            cell.classList.add('current-day');
         }
-        if (cellDate < todayNorm) cell.classList.add('calendar-day-past');
-    }
 
-    fillDiv.style.height = `${percentageCompleted}%`;
-    fillDiv.style.backgroundColor = getProgressFillColor(percentageCompleted);
-
-    if (hasHistoryData) cell.classList.add('has-history');
-    if (percentageCompleted > 40) cell.classList.add('high-fill'); 
-
-    cell.addEventListener('click', () => showHistoryModal(dateString));
-    domElements.calendarGrid.appendChild(cell);
-  }
-}
-
-function showHistoryModal(dateString) {
-  currentModalDate = dateString;
-  if (!domElements.historyModal) return;
-  domElements.historyModal.classList.add('opening');
-
-  const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
-  let historyEntryToDisplay = null;
-
-  if (dateString === getTodayDateString() && !localStorage.getItem(historyKey)) {
-    updateTodaysHistoryEntry();
-  }
-  
-  const historyDataString = localStorage.getItem(historyKey);
-
-  if (historyDataString) {
-    try {
-      historyEntryToDisplay = JSON.parse(historyDataString);
-      if (historyEntryToDisplay.totalTasksOnDate === undefined) {
-        const tempProgress = calculateProgressForDate(dateString, true);
-        historyEntryToDisplay.totalTasksOnDate = tempProgress.totalStandardTasks;
-      }
-      if (historyEntryToDisplay.dailyTargetPoints === undefined) {
-        historyEntryToDisplay.dailyTargetPoints = DAILY_TARGET_POINTS;
-      }
-    } catch (e) { console.error("Error parsing history for modal:", e); }
-  }
-
-  if (domElements.historyModalDate) domElements.historyModalDate.textContent = new Date(dateString + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-
-  if (historyEntryToDisplay) {
-    if (domElements.historyModalPointsValue) domElements.historyModalPointsValue.textContent = historyEntryToDisplay.pointsEarned !== undefined ? historyEntryToDisplay.pointsEarned.toString() : 'N/A';
-    if (domElements.historyModalPointsTotal) domElements.historyModalPointsTotal.textContent = (historyEntryToDisplay.dailyTargetPoints || DAILY_TARGET_POINTS).toString();
-    
-    const completionPercentage = historyEntryToDisplay.percentageCompleted !== undefined ? historyEntryToDisplay.percentageCompleted : 0;
-    if (domElements.historyPercentageProgressFill) {
-        domElements.historyPercentageProgressFill.style.width = `${completionPercentage}%`;
-        domElements.historyPercentageProgressFill.style.backgroundColor = getProgressFillColor(completionPercentage);
-        domElements.historyPercentageProgressFill.textContent = `${completionPercentage}%`;
-        domElements.historyPercentageProgressFill.setAttribute('aria-valuenow', completionPercentage);
-    }
-
-    if (domElements.historyTasksList) {
-        domElements.historyTasksList.innerHTML = '';
-        let hasCompletedTasks = false;
-        if (historyEntryToDisplay.completedTaskStructure) {
-            Object.values(historyEntryToDisplay.completedTaskStructure).forEach(catData => {
-                 if (catData.tasks && catData.tasks.length > 0) {
-                    hasCompletedTasks = true;
-                    const categoryGroup = document.createElement('div');
-                    categoryGroup.className = 'history-category-group';
-                    categoryGroup.innerHTML = `<h5 class="history-category-title ${catData.type === 'special' ? 'special-history-title' : ''}">${catData.name}</h5>`;
-                    const ul = document.createElement('ul');
-                    catData.tasks.forEach(taskText => {
-                        ul.innerHTML += `<li><span>${taskText}</span></li>`;
-                    });
-                    categoryGroup.appendChild(ul);
-                    domElements.historyTasksList.appendChild(categoryGroup);
+        if (cellDate > today) {
+            cell.classList.add('future-day');
+        } else {
+            cell.setAttribute('role', 'button');
+            cell.setAttribute('tabindex', '0');
+            cell.setAttribute('aria-label', `View history for ${monthName} ${day}`);
+            cell.addEventListener('click', () => openHistoryModal(dateString));
+            cell.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    openHistoryModal(dateString);
                 }
             });
-        }
-        if (!hasCompletedTasks) domElements.historyTasksList.innerHTML = '<p>No tasks were completed on this day.</p>';
-    }
-    if (domElements.expandTasksButton) domElements.expandTasksButton.classList.toggle('hidden', !Object.values(historyEntryToDisplay.completedTaskStructure || {}).some(cat => cat.tasks && cat.tasks.length > 0));
 
-    if (domElements.historyUserNoteDisplay) {
-        domElements.historyUserNoteDisplay.textContent = historyEntryToDisplay.userNote || "No reflection recorded for this day.";
-        domElements.historyUserNoteDisplay.classList.remove('hidden');
+            // Add progress fill
+            const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
+            const historyData = localStorage.getItem(historyKey);
+            if (historyData) {
+                try {
+                    const entry = JSON.parse(historyData);
+                    const percentage = entry.percentageCompleted || 0;
+                    const fillEl = cell.querySelector('.calendar-day-fill');
+                    if (fillEl) {
+                        fillEl.style.height = `${percentage}%`;
+                        fillEl.style.backgroundColor = getProgressFillColor(percentage);
+                    }
+                    if (percentage > 75) {
+                        cell.classList.add('high-fill');
+                    }
+                } catch(e) { console.error(`Error parsing history for ${dateString}:`, e); }
+            }
+        }
+        domElements.calendarGrid.appendChild(cell);
     }
-    if (domElements.historyUserNoteEdit) {
-        domElements.historyUserNoteEdit.value = historyEntryToDisplay.userNote || "";
-        domElements.historyUserNoteEdit.classList.add('hidden'); 
-    }
-    if (domElements.historicalNoteControls) domElements.historicalNoteControls.classList.add('hidden');
-    if (domElements.historicalNoteStatus) domElements.historicalNoteStatus.textContent = '';
-    if (domElements.expandReflectionButton) domElements.expandReflectionButton.classList.toggle('hidden', !historyEntryToDisplay.userNote);
-    
-    if (domElements.historyUserNoteDisplay) { 
-        domElements.historyUserNoteDisplay.ondblclick = () => {
-            if (domElements.historyUserNoteDisplay) domElements.historyUserNoteDisplay.classList.add('hidden');
-            if (domElements.historyUserNoteEdit) domElements.historyUserNoteEdit.classList.remove('hidden');
-            if (domElements.historicalNoteControls) domElements.historicalNoteControls.classList.remove('hidden');
-            if (domElements.historyUserNoteEdit) domElements.historyUserNoteEdit.focus();
-        };
-    }
-  } else { 
-    if (domElements.historyModalPointsValue) domElements.historyModalPointsValue.textContent = 'N/A';
-    if (domElements.historyModalPointsTotal) domElements.historyModalPointsTotal.textContent = DAILY_TARGET_POINTS.toString();
-    if (domElements.historyPercentageProgressFill) {
-        domElements.historyPercentageProgressFill.style.width = `0%`;
-        domElements.historyPercentageProgressFill.style.backgroundColor = getProgressFillColor(0);
-        domElements.historyPercentageProgressFill.textContent = `0%`;
-        domElements.historyPercentageProgressFill.setAttribute('aria-valuenow', 0);
-    }
-    if (domElements.historyTasksList) domElements.historyTasksList.innerHTML = '<p>No data available for this day.</p>';
-    if (domElements.historyUserNoteDisplay) {
-        domElements.historyUserNoteDisplay.textContent = "No data available for this day.";
-        domElements.historyUserNoteDisplay.classList.remove('hidden');
-         domElements.historyUserNoteDisplay.ondblclick = null; 
-    }
-    if (domElements.historyUserNoteEdit) domElements.historyUserNoteEdit.classList.add('hidden');
-    if (domElements.historicalNoteControls) domElements.historicalNoteControls.classList.add('hidden');
-    if (domElements.historicalNoteStatus) domElements.historicalNoteStatus.textContent = '';
-    if (domElements.expandTasksButton) domElements.expandTasksButton.classList.add('hidden');
-    if (domElements.expandReflectionButton) domElements.expandReflectionButton.classList.add('hidden');
-  }
-  domElements.historyModal.classList.remove('hidden');
 }
 
+function openHistoryModal(dateString) {
+    if (!domElements.historyModal) return;
+
+    currentModalDate = dateString;
+    const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
+    const isToday = dateString === getTodayDateString();
+    let historyEntry = null;
+
+    // Ensure today's history is up-to-date before displaying
+    if (isToday) {
+        updateTodaysHistoryEntry();
+    }
+    
+    const historyDataString = localStorage.getItem(historyKey);
+    if (historyDataString) {
+        try {
+            historyEntry = JSON.parse(historyDataString);
+        } catch (e) {
+            console.error(`Could not parse history for ${dateString}`, e);
+            return;
+        }
+    }
+    
+    if (!historyEntry) {
+        alert("No history found for this date.");
+        return;
+    }
+
+    const formattedDate = new Date(dateString + 'T00:00:00').toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+    });
+
+    domElements.historyModalDate.textContent = formattedDate;
+
+    // Stats
+    const points = historyEntry.pointsEarned || 0;
+    const totalPoints = historyEntry.dailyTargetPoints || progressTrackers.find(t=>t.type==='daily')?.targetPoints || 2700;
+    const percentage = historyEntry.percentageCompleted || 0;
+
+    domElements.historyModalPointsValue.textContent = points;
+    domElements.historyModalPointsTotal.textContent = totalPoints;
+    domElements.historyPercentageProgressFill.style.width = `${percentage}%`;
+    domElements.historyPercentageProgressFill.style.backgroundColor = getProgressFillColor(percentage);
+    domElements.historyPercentageProgressFill.textContent = `${percentage}%`;
+    domElements.historyPercentageProgressFill.setAttribute('aria-valuenow', percentage);
+
+    // Completed Tasks
+    domElements.historyTasksList.innerHTML = '';
+    let hasCompletedTasks = false;
+    if (historyEntry.completedTaskStructure) {
+        Object.values(historyEntry.completedTaskStructure).forEach(catData => {
+            if (catData.tasks && catData.tasks.length > 0) {
+                hasCompletedTasks = true;
+                const catGroup = document.createElement('div');
+                catGroup.className = 'history-category-group';
+                
+                const catTitle = document.createElement('h4');
+                catTitle.className = 'history-category-title';
+                catTitle.textContent = catData.name;
+                if(catData.type === 'special') catTitle.classList.add('special-history-title');
+                catGroup.appendChild(catTitle);
+
+                const ul = document.createElement('ul');
+                catData.tasks.forEach(taskText => {
+                    const li = document.createElement('li');
+                    li.textContent = taskText;
+                    ul.appendChild(li);
+                });
+                catGroup.appendChild(ul);
+                domElements.historyTasksList.appendChild(catGroup);
+            }
+        });
+    }
+    if (!hasCompletedTasks) {
+        domElements.historyTasksList.innerHTML = '<p>No tasks were completed on this day.</p>';
+    }
+    domElements.expandTasksButton.classList.toggle('hidden', !hasCompletedTasks);
+
+    // Reflection Note
+    const userNote = historyEntry.userNote || '';
+    domElements.historyUserNoteDisplay.textContent = userNote;
+    domElements.historyUserNoteEdit.value = userNote;
+    
+    domElements.expandReflectionButton.classList.toggle('hidden', !userNote);
+
+    // Only today's note can be edited from this view
+    const isEditable = isToday;
+    domElements.historyUserNoteDisplay.classList.toggle('hidden', isEditable);
+    domElements.historyUserNoteEdit.classList.toggle('hidden', !isEditable);
+    domElements.historicalNoteControls.classList.toggle('hidden', !isEditable);
+    if (domElements.historicalNoteStatus) domElements.historicalNoteStatus.textContent = '';
+
+
+    domElements.historyModal.classList.add('opening');
+    domElements.historyModal.classList.remove('hidden');
+}
 
 function closeHistoryModal() {
-  if (domElements.historyModal) {
-    domElements.historyModal.classList.add('hidden');
-    domElements.historyModal.classList.remove('opening');
-  }
-  currentModalDate = null; 
+    if (domElements.historyModal) {
+        domElements.historyModal.classList.add('hidden');
+        domElements.historyModal.classList.remove('opening');
+    }
+    currentModalDate = null;
 }
 
 function saveHistoricalNote() {
-    if (!currentModalDate || !domElements.historyUserNoteEdit || !domElements.historicalNoteStatus) return;
+    if (!currentModalDate) return;
+
     const noteContent = domElements.historyUserNoteEdit.value;
     const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + currentModalDate;
-    let historyEntry;
-
-    const existingHistoryStr = localStorage.getItem(historyKey);
-    if (existingHistoryStr) {
-        try { historyEntry = JSON.parse(existingHistoryStr); } catch (e) { return; }
-    } else {
-        const progress = calculateProgressForDate(currentModalDate, true);
-        historyEntry = {
-            date: currentModalDate, completedTaskStructure: {}, userNote: "",
-            pointsEarned: progress.pointsEarned, percentageCompleted: progress.percentage,
-            totalTasksOnDate: progress.totalStandardTasks, dailyTargetPoints: DAILY_TARGET_POINTS
-        };
+    
+    const historyDataString = localStorage.getItem(historyKey);
+    let historyEntry = {};
+    if (historyDataString) {
+        historyEntry = JSON.parse(historyDataString);
     }
 
     historyEntry.userNote = noteContent;
     localStorage.setItem(historyKey, JSON.stringify(historyEntry));
-
+    
+    // Also update the main note input if we're editing today's note
     if (currentModalDate === getTodayDateString()) {
-        if (domElements.dailyNoteInput) domElements.dailyNoteInput.value = noteContent;
-        localStorage.setItem(STORAGE_KEY_DAILY_NOTE_PREFIX + currentModalDate, noteContent);
+        domElements.dailyNoteInput.value = noteContent;
     }
 
-    if (domElements.historyUserNoteDisplay) {
-        domElements.historyUserNoteDisplay.textContent = noteContent || "No reflection recorded for this day.";
-        domElements.historyUserNoteDisplay.classList.remove('hidden');
+    if (domElements.historicalNoteStatus) {
+        domElements.historicalNoteStatus.textContent = 'Saved!';
+        setTimeout(() => {
+            if(domElements.historicalNoteStatus) domElements.historicalNoteStatus.textContent = '';
+        }, 1500);
     }
-    if (domElements.historyUserNoteEdit) domElements.historyUserNoteEdit.classList.add('hidden');
-    if (domElements.historicalNoteControls) domElements.historicalNoteControls.classList.add('hidden');
-    domElements.historicalNoteStatus.textContent = 'Reflection saved!';
-    setTimeout(() => { if (domElements.historicalNoteStatus) domElements.historicalNoteStatus.textContent = ''; }, 2000);
-    if (domElements.expandReflectionButton) domElements.expandReflectionButton.classList.toggle('hidden', !noteContent);
-    renderCalendar();
 }
 
 function clearHistoricalNote() {
-     if (!domElements.historyUserNoteEdit) return;
-    domElements.historyUserNoteEdit.value = "";
+    if (!currentModalDate || !confirm("Are you sure you want to clear this reflection?")) return;
+    domElements.historyUserNoteEdit.value = '';
+    saveHistoricalNote();
 }
 
-function populateMonthYearPicker() {
-    if (!domElements.pickerMonthsGrid || !domElements.pickerYearsList) return;
-    domElements.pickerMonthsGrid.innerHTML = '';
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    months.forEach((month, index) => {
-        const btn = document.createElement('button');
-        btn.className = 'month-option';
-        btn.textContent = month;
-        btn.dataset.month = index.toString();
-        if (index === pickerSelectedMonth) btn.classList.add('selected');
-        btn.onclick = () => { pickerSelectedMonth = index; calendarDisplayDate = new Date(pickerSelectedYear, pickerSelectedMonth, 1); renderCalendar(); populateMonthYearPicker(); };
-        domElements.pickerMonthsGrid.appendChild(btn);
-    });
-    domElements.pickerYearsList.innerHTML = '';
-    let yearToScrollTo = null;
-    for (let year = 2000; year <= 2100; year++) {
-        const btn = document.createElement('button');
-        btn.className = 'year-option';
-        btn.textContent = year.toString();
-        btn.dataset.year = year.toString();
-        if (year === pickerSelectedYear) { btn.classList.add('selected'); yearToScrollTo = btn; }
-        btn.onclick = () => { pickerSelectedYear = year; calendarDisplayDate = new Date(pickerSelectedYear, pickerSelectedMonth, 1); renderCalendar(); populateMonthYearPicker(); };
-        domElements.pickerYearsList.appendChild(btn);
-    }
-    if (yearToScrollTo) yearToScrollTo.scrollIntoView({ block: 'nearest' });
-}
 
 function toggleMonthYearPicker() {
-    if (!domElements.monthYearPickerModal) return;
     isMonthYearPickerOpen = !isMonthYearPickerOpen;
     if (isMonthYearPickerOpen) {
-        domElements.monthYearPickerModal.classList.add('opening');
         pickerSelectedMonth = calendarDisplayDate.getMonth();
         pickerSelectedYear = calendarDisplayDate.getFullYear();
-        populateMonthYearPicker();
+        renderMonthYearPicker();
+        domElements.monthYearPickerModal.classList.add('opening');
         domElements.monthYearPickerModal.classList.remove('hidden');
     } else {
+        closeMonthYearPicker();
+    }
+}
+
+function closeMonthYearPicker() {
+    isMonthYearPickerOpen = false;
+    if (domElements.monthYearPickerModal) {
         domElements.monthYearPickerModal.classList.add('hidden');
         domElements.monthYearPickerModal.classList.remove('opening');
     }
 }
 
-function closeMonthYearPicker() {
-    if (!domElements.monthYearPickerModal) return;
-    isMonthYearPickerOpen = false;
-    domElements.monthYearPickerModal.classList.add('hidden');
-    domElements.monthYearPickerModal.classList.remove('opening');
-}
+function renderMonthYearPicker() {
+    if (!domElements.pickerMonthsGrid || !domElements.pickerYearsList) return;
 
-function updateCategoryTabIndicators() {
-    const today = localStorage.getItem(STORAGE_KEY_LAST_VISIT_DATE) || getTodayDateString();
-    currentCategories.forEach(category => {
-        const tabButton = document.getElementById(`tab-button-${category.id}`);
-        if (!tabButton) return;
-
-        tabButton.querySelector('.notification-badge')?.remove();
-        tabButton.classList.remove('category-complete-indicator');
-
-        if (category.type === 'special') return;
-
-        const allTaskLists = appContent[category.id] ? getAllTaskListFiles(appContent[category.id]) : [];
-        let totalTasksInCat = 0;
-        let completedTasksInCat = 0;
-
-        allTaskLists.forEach(tl => {
-            const checklistItems = tl.content || [];
-            totalTasksInCat += checklistItems.length;
-            completedTasksInCat += checklistItems.filter(ci => localStorage.getItem(getChecklistItemStateStorageKey(today, ci.id)) === 'true').length;
-        });
-        
-        if (totalTasksInCat === 0) return; 
-        const isFullyCompleted = completedTasksInCat === totalTasksInCat;
-        const incompleteTasksCount = totalTasksInCat - completedTasksInCat;
-
-        if (isFullyCompleted) tabButton.classList.add('category-complete-indicator');
-        else if (incompleteTasksCount > 0) {
-            const badge = document.createElement('span');
-            badge.className = 'notification-badge';
-            badge.textContent = incompleteTasksCount.toString();
-            
-            const optionsIcon = tabButton.querySelector('.tab-options-icon');
-            if (optionsIcon) {
-                tabButton.insertBefore(badge, optionsIcon);
-            } else {
-                tabButton.appendChild(badge);
-            }
+    // Render months
+    domElements.pickerMonthsGrid.innerHTML = '';
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    months.forEach((month, index) => {
+        const monthEl = document.createElement('button');
+        monthEl.className = 'month-option';
+        monthEl.textContent = month;
+        monthEl.dataset.month = index;
+        if (index === pickerSelectedMonth) {
+            monthEl.classList.add('selected');
         }
+        monthEl.addEventListener('click', () => handleSelectMonthOrYear('month', index));
+        domElements.pickerMonthsGrid.appendChild(monthEl);
     });
+
+    // Render years
+    domElements.pickerYearsList.innerHTML = '';
+    const currentYear = new Date().getFullYear();
+    for (let year = currentYear + 1; year >= currentYear - 5; year--) {
+        const yearEl = document.createElement('button');
+        yearEl.className = 'year-option';
+        yearEl.textContent = year;
+        yearEl.dataset.year = year;
+        if (year === pickerSelectedYear) {
+            yearEl.classList.add('selected');
+        }
+        yearEl.addEventListener('click', () => handleSelectMonthOrYear('year', year));
+        domElements.pickerYearsList.appendChild(yearEl);
+    }
 }
 
+function handleSelectMonthOrYear(type, value) {
+    if (type === 'month') {
+        pickerSelectedMonth = value;
+    } else {
+        pickerSelectedYear = value;
+    }
+    
+    // Update display immediately for better feedback
+    const tempDate = new Date(pickerSelectedYear, pickerSelectedMonth, 1);
+    domElements.calendarMonthYear.textContent = `${tempDate.toLocaleString('default', { month: 'long' })} ${pickerSelectedYear}`;
+    
+    // Mark the new selections in the picker
+    renderMonthYearPicker();
 
-function updateAllProgress() {
-  if (domElements.dashboardColumnView && !domElements.dashboardColumnView.classList.contains('hidden')) {
-    updateDashboardSummaries(); 
-  }
-  updateTodaysProgress();
-  updateCurrentWeekProgress();
-  updateCategoryTabIndicators();
-  renderCalendar(); 
+    // Set the calendar date and close the picker
+    calendarDisplayDate.setFullYear(pickerSelectedYear, pickerSelectedMonth, 1);
+    renderCalendar();
+    closeMonthYearPicker();
 }
 
 function openFullscreenContentModal(type, date) {
@@ -1847,6 +1869,12 @@ function handleSelectCategoryType(type) {
 }
 
 // Theme Management
+const THEMES = [
+    { id: 'original', name: 'Original Theme' },
+    { id: 'power-safe', name: 'Save Mode' },
+    { id: 'flip-clock', name: 'Dark Theme' }
+];
+
 function applyTheme(theme) {
     document.body.dataset.theme = theme;
     currentTheme = theme;
@@ -1858,18 +1886,42 @@ function saveTheme(theme) {
     updateAllProgress(); // Re-render elements with dynamic colors
 }
 
-function openThemeChoiceModal() {
-    if (domElements.themeChoiceModal) {
-        domElements.themeChoiceModal.classList.add('opening');
-        domElements.themeChoiceModal.classList.remove('hidden');
+function toggleThemeDropdown() {
+    const container = domElements.appearanceMenuItemContainer;
+    if (!container) return;
+    const isOpen = container.classList.toggle('open');
+    if (isOpen) {
+        renderThemeDropdown();
     }
 }
 
-function closeThemeChoiceModal() {
-     if (domElements.themeChoiceModal) {
-        domElements.themeChoiceModal.classList.add('hidden');
-        domElements.themeChoiceModal.classList.remove('opening');
-    }
+function renderThemeDropdown() {
+    const container = domElements.themeDropdownContainer;
+    if (!container) return;
+
+    container.innerHTML = '';
+    THEMES.forEach(theme => {
+        const optionButton = document.createElement('button');
+        optionButton.className = 'theme-option-button';
+        optionButton.dataset.themeId = theme.id;
+        
+        const isActive = theme.id === currentTheme;
+        if (isActive) {
+            optionButton.classList.add('active');
+        }
+
+        optionButton.innerHTML = `
+            <span>${theme.name}</span>
+            <span class="theme-active-indicator"></span>
+        `;
+        
+        optionButton.addEventListener('click', () => {
+            saveTheme(theme.id);
+            renderThemeDropdown(); // Re-render to update the active dot
+        });
+        
+        container.appendChild(optionButton);
+    });
 }
 
 
@@ -2030,12 +2082,24 @@ function toggleSidePanel() {
     if (isOpen) {
         const menuItems = domElements.sidePanelMenu.querySelectorAll('.side-panel-item');
         menuItems.forEach(item => item.classList.remove('active-menu-item'));
-        if (currentActiveViewId === 'main' && domElements.menuMainView) {
-            domElements.menuMainView.classList.add('active-menu-item');
-        } else if (currentActiveViewId === 'activity-dashboard' && domElements.menuActivityDashboard) {
-            domElements.menuActivityDashboard.classList.add('active-menu-item');
+        
+        let activeMenuItem = null;
+        if (currentActiveViewId === 'main') {
+            activeMenuItem = domElements.menuMainView;
+        } else if (currentActiveViewId === 'activity-dashboard') {
+            activeMenuItem = domElements.menuActivityDashboard;
+        } else if (currentActiveViewId === 'progress-management') {
+            activeMenuItem = domElements.menuProgressManagement;
         }
-        // Focus the first item when opening
+        
+        if (activeMenuItem) {
+             activeMenuItem.classList.add('active-menu-item');
+        } else {
+            // If it's the appearance dropdown, we don't highlight it as "active" since it's not a view
+            const mainViewButton = domElements.sidePanelMenu.querySelector('#menu-main-view');
+            if(mainViewButton) mainViewButton.classList.add('active-menu-item');
+        }
+        
         const firstItem = domElements.sidePanelMenu.querySelector('.side-panel-item');
         if(firstItem) firstItem.focus();
     } else {
@@ -2043,20 +2107,37 @@ function toggleSidePanel() {
     }
 }
 
-function showAppView() {
+function showMainAppView() {
     currentActiveViewId = 'main';
-    if (domElements.dashboardColumnView) domElements.dashboardColumnView.classList.add('hidden');
+    domElements.progressManagementView.classList.add('hidden');
+    domElements.appViewWrapper.classList.remove('hidden');
+    
     if (domElements.mainContentWrapper) domElements.mainContentWrapper.classList.remove('hidden');
+    if (domElements.dashboardColumn) domElements.dashboardColumn.classList.add('hidden');
+
+    switchTab(activeTabId || 'dashboard');
+    updateAllProgress();
 }
 
 function showActivityDashboardView() {
     currentActiveViewId = 'activity-dashboard';
+    domElements.progressManagementView.classList.add('hidden');
+    domElements.appViewWrapper.classList.remove('hidden');
+    
     if (domElements.mainContentWrapper) domElements.mainContentWrapper.classList.add('hidden');
-    if (domElements.dashboardColumnView) {
-        domElements.dashboardColumnView.classList.remove('hidden');
+    if (domElements.dashboardColumn) {
+        domElements.dashboardColumn.classList.remove('hidden');
         updateDashboardSummaries(); 
     }
 }
+
+function showProgressManagementView() {
+    currentActiveViewId = 'progress-management';
+    domElements.appViewWrapper.classList.add('hidden');
+    domElements.progressManagementView.classList.remove('hidden');
+    renderProgressManagementList();
+}
+
 
 // Drag and Drop Handlers
 function handleDragStart(e, item) {
@@ -2103,228 +2184,607 @@ function handleDrop(e, targetFolder) {
     renderCategorySectionContent(currentPath[0].id);
 }
 
-
-function initializeApp() {
-    Object.keys(domElements).forEach(key => {
-        const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-        domElements[key] = document.getElementById(id);
-    });
-
-    domElements.tabsContainer = document.getElementById('tabs');
-    domElements.tabContentsContainer = document.getElementById('tab-content');
-    domElements.categorySectionTemplate = document.getElementById('category-section-template');
-    domElements.categoryTabContextMenu = document.getElementById('category-tab-context-menu');
-    domElements.ctxRenameCategoryButton = document.getElementById('ctx-rename-category');
-    domElements.ctxDeleteCategoryButton = document.getElementById('ctx-delete-category');
-    domElements.dashboardColumnView = document.getElementById('dashboard-column');
-    domElements.dashboardSummariesContainer = document.getElementById('dashboard-summaries');
-    domElements.mobileProgressLocation = document.getElementById('mobile-progress-location');
-    domElements.nameEntryActions = document.getElementById('name-entry-actions');
-
-    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'original';
-    applyTheme(savedTheme);
-
-    loadAppData();
-    renderTabs();
-    renderAllCategorySections(); 
+// Progress Management Implementation
+function renderProgressManagementList() {
+    const activeTrackers = progressTrackers.filter(t => !t.isArchived).sort((a,b) => a.order - b.order);
+    const archivedTrackers = progressTrackers.filter(t => t.isArchived).sort((a, b) => new Date(getTrackerDateRange(b).endDate) - new Date(getTrackerDateRange(a).endDate));
     
-    if (domElements.dashboardColumnView) { 
-        domElements.dashboardColumnView.classList.add('hidden');
-    }
-    showAppView(); 
-    switchTab('dashboard'); 
-    
-    updateAllProgress();
+    domElements.activeProgressList.innerHTML = '';
+    activeTrackers.forEach(tracker => {
+        const item = document.createElement('div');
+        item.className = 'progress-tracker-item';
+        const { startDate, endDate } = getTrackerDateRange(tracker);
+        const dateString = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+        const typeString = tracker.type.charAt(0).toUpperCase() + tracker.type.slice(1);
 
-    // Event Listeners
-    if (domElements.dashboardTabButton) domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
-
-    if (domElements.hamburgerButton) domElements.hamburgerButton.addEventListener('click', toggleSidePanel);
-    if (domElements.sidePanelOverlay) domElements.sidePanelOverlay.addEventListener('click', toggleSidePanel);
-    
-    if (domElements.menuMainView) domElements.menuMainView.addEventListener('click', () => { showAppView(); switchTab('dashboard'); toggleSidePanel(); });
-    if (domElements.menuActivityDashboard) domElements.menuActivityDashboard.addEventListener('click', () => { showActivityDashboardView(); toggleSidePanel(); });
-    if (domElements.menuAppearance) domElements.menuAppearance.addEventListener('click', () => { openThemeChoiceModal(); toggleSidePanel(); });
-    
-    if (domElements.themeChoiceCloseButton) domElements.themeChoiceCloseButton.addEventListener('click', closeThemeChoiceModal);
-    if (domElements.selectOriginalThemeButton) domElements.selectOriginalThemeButton.addEventListener('click', () => { saveTheme('original'); closeThemeChoiceModal(); });
-    if (domElements.selectFlipClockThemeButton) domElements.selectFlipClockThemeButton.addEventListener('click', () => { saveTheme('flip-clock'); closeThemeChoiceModal(); });
-
-    if (domElements.addCategoryButton) domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
-    if (domElements.chooseCategoryTypeCloseButton) domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
-    if (domElements.selectStandardCategoryButton) domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
-    if (domElements.selectSpecialCategoryButton) domElements.selectSpecialCategoryButton.addEventListener('click', () => handleSelectCategoryType('special'));
-
-    if (domElements.nameEntryCloseButton) domElements.nameEntryCloseButton.addEventListener('click', closeNameEntryModal);
-    if (domElements.confirmNameEntryButton) domElements.confirmNameEntryButton.addEventListener('click', handleConfirmNameEntry);
-    if (domElements.cancelNameEntryButton) domElements.cancelNameEntryButton.addEventListener('click', closeNameEntryModal);
-    if (domElements.nameEntryInput) domElements.nameEntryInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); handleConfirmNameEntry(); }
-    });
-
-    if (domElements.noteEditorCloseButton) domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
-    if (domElements.noteAddImageButton) domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
-    if (domElements.imageUploadInput) domElements.imageUploadInput.addEventListener('change', (e) => {
-        if(e.target.files && e.target.files[0]) processAndInsertImage(e.target.files[0]);
-    });
-
-    if (domElements.taskListCloseButton) domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
-    if (domElements.taskListEditButton) domElements.taskListEditButton.addEventListener('click', toggleTaskListEditMode);
-    if (domElements.taskListResetButton) domElements.taskListResetButton.addEventListener('click', handleResetTasks);
-    if (domElements.addChecklistItemForm) domElements.addChecklistItemForm.addEventListener('submit', handleAddChecklistItem);
-
-    if (domElements.calendarPrevMonthButton) domElements.calendarPrevMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
-    if (domElements.calendarNextMonthButton) domElements.calendarNextMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
-    if (domElements.calendarMonthYearButton) domElements.calendarMonthYearButton.addEventListener('click', toggleMonthYearPicker);
-    if (domElements.monthYearPickerCloseButton) domElements.monthYearPickerCloseButton.addEventListener('click', closeMonthYearPicker);
-    
-    if (domElements.saveNoteButton) domElements.saveNoteButton.addEventListener('click', saveDailyNote);
-    if (domElements.dailyNoteInput) domElements.dailyNoteInput.addEventListener('input', () => { if (domElements.saveNoteButton) domElements.saveNoteButton.textContent = 'Save Note'; });
-
-    if (domElements.historyModalCloseButton) domElements.historyModalCloseButton.addEventListener('click', closeHistoryModal);
-    if (domElements.saveHistoricalNoteButton) domElements.saveHistoricalNoteButton.addEventListener('click', saveHistoricalNote);
-    if (domElements.clearHistoricalNoteButton) domElements.clearHistoricalNoteButton.addEventListener('click', clearHistoricalNote);
-    if (domElements.expandTasksButton) domElements.expandTasksButton.addEventListener('click', () => openFullscreenContentModal('tasks', currentModalDate));
-    if (domElements.expandReflectionButton) domElements.expandReflectionButton.addEventListener('click', () => openFullscreenContentModal('reflection', currentModalDate));
-    if (domElements.fullscreenModalCloseButton) domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
-
-    if (domElements.deleteConfirmationCloseButton) domElements.deleteConfirmationCloseButton.addEventListener('click', hideDeleteConfirmation);
-    if (domElements.confirmDeleteButton) domElements.confirmDeleteButton.addEventListener('click', confirmDeletion);
-    if (domElements.cancelDeleteButton) domElements.cancelDeleteButton.addEventListener('click', hideDeleteConfirmation);
-    
-    document.addEventListener('click', (e) => {
-        hideCategoryContextMenu();
-        hideItemContextMenu();
-        const addActionContainer = document.querySelector('.add-action-container');
-        const viewModeContainer = document.querySelector('.view-mode-container');
-        if (isAddActionMenuOpen && addActionContainer && !addActionContainer.contains(e.target)) {
-            isAddActionMenuOpen = false;
-            addActionContainer.classList.remove('open');
-        }
-        if (viewModeContainer && viewModeContainer.classList.contains('open') && !viewModeContainer.contains(e.target)) {
-            viewModeContainer.classList.remove('open');
-        }
-    });
-    if(domElements.categoryTabContextMenu) domElements.categoryTabContextMenu.addEventListener('click', (e) => e.stopPropagation());
-    
-    if(domElements.ctxRenameCategoryButton) domElements.ctxRenameCategoryButton.addEventListener('click', handleRenameCategoryAction);
-    if(domElements.ctxDeleteCategoryButton) domElements.ctxDeleteCategoryButton.addEventListener('click', handleDeleteCategoryAction);
-    
-}
-
-function renderAllCategorySections() {
-    if (!domElements.tabContentsContainer || !domElements.categorySectionTemplate) return;
-    
-    domElements.tabContentsContainer.querySelectorAll('.category-section:not(#dashboard-content)').forEach(sec => sec.remove());
-
-    currentCategories.forEach(category => {
-        if (category.id === 'dashboard') return;
-
-        const sectionClone = domElements.categorySectionTemplate.content.cloneNode(true);
-        const sectionElement = sectionClone.querySelector('.category-section');
+        item.innerHTML = `
+            <div class="progress-tracker-info">
+                <h4>${tracker.name}</h4>
+                <p>${typeString} (${dateString})</p>
+            </div>
+            <div class="progress-tracker-actions">
+                <button class="icon-button" data-action="edit" title="Edit"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>
+                <button class="icon-button" data-action="reset" title="Reset"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"></path></svg></button>
+                <button class="icon-button" data-action="delete" title="Delete"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>
+            </div>
+        `;
         
-        sectionElement.id = `category-section-${category.id}`;
-        sectionElement.setAttribute('aria-labelledby', `tab-button-${category.id}`);
-        if (activeTabId !== category.id) {
-            sectionElement.classList.add('hidden');
-        }
-
-        sectionElement.querySelector('.category-title-text').textContent = category.name;
+        const deleteBtn = item.querySelector('[data-action="delete"]');
+        if (tracker.isDefault) deleteBtn.disabled = true;
+        else deleteBtn.addEventListener('click', () => showDeleteConfirmation('progressTracker', tracker.id, `Are you sure you want to delete the "${tracker.name}" progress tracker?`));
         
-        if(activeTabId === category.id) {
-             renderCategorySectionContent(category.id);
-        }
+        item.querySelector('[data-action="edit"]').addEventListener('click', () => openProgressEditorModal('edit', tracker.id));
+        item.querySelector('[data-action="reset"]').addEventListener('click', () => handleResetProgressTracker(tracker.id));
+        domElements.activeProgressList.appendChild(item);
+    });
 
-        domElements.tabContentsContainer.appendChild(sectionElement);
+    domElements.archivedProgressList.innerHTML = '';
+    archivedTrackers.forEach(tracker => {
+        const item = renderProgressHistoryItem(tracker);
+        domElements.archivedProgressList.appendChild(item);
     });
 }
 
-function showCategoryContextMenu(categoryId, targetButton) {
-    if (!domElements.categoryTabContextMenu) return;
-    currentContextMenuTargetTab = targetButton;
+function renderProgressHistoryItem(tracker) {
+    const item = document.createElement('div');
+    item.className = 'progress-history-item';
     
-    const category = currentCategories.find(c => c.id === categoryId);
-    if (domElements.ctxDeleteCategoryButton) {
-        domElements.ctxDeleteCategoryButton.disabled = category ? (category.deletable === false) : true;
-        domElements.ctxDeleteCategoryButton.title = (category && category.deletable === false) ? "Default categories cannot be deleted." : "Delete this category";
-    }
+    const { startDate, endDate } = getTrackerDateRange(tracker);
+    const dateString = `${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}`;
+    
+    const { pointsEarned, targetPoints, percentage } = calculateProgressForTracker(tracker);
+    const isCompleted = percentage >= 100;
 
-    const rect = targetButton.getBoundingClientRect();
-    domElements.categoryTabContextMenu.style.top = `${rect.bottom + window.scrollY}px`;
-    domElements.categoryTabContextMenu.style.left = `${rect.left + window.scrollX}px`;
-    domElements.categoryTabContextMenu.classList.remove('hidden');
-    domElements.categoryTabContextMenu.querySelector('button:not([disabled])')?.focus();
-}
-function hideCategoryContextMenu() {
-    if (domElements.categoryTabContextMenu) domElements.categoryTabContextMenu.classList.add('hidden');
-    currentContextMenuTargetTab = null;
-    document.querySelectorAll('.tab-options-icon.visible').forEach(icon => icon.classList.remove('visible'));
-}
-function handleRenameCategoryAction() {
-    if (!currentContextMenuTargetTab) return;
-    const categoryId = currentContextMenuTargetTab.dataset.categoryId;
-    const category = currentCategories.find(c => c.id === categoryId);
-    if (!category) return;
-    
-    openNameEntryModal('rename_category', 'category', category);
-    hideCategoryContextMenu();
-}
-function handleDeleteCategoryAction() {
-    if (!currentContextMenuTargetTab) return;
-    const categoryId = currentContextMenuTargetTab.dataset.categoryId;
-    const category = currentCategories.find(c => c.id === categoryId);
-    if (!category || category.deletable === false) {
-         if (category) alert(`Category "${category.name}" is a default category and cannot be deleted.`);
-         hideCategoryContextMenu();
-         return;
-    }
-    showDeleteConfirmation('category', categoryId, `Are you sure you want to delete the category "${category.name}" and all its contents? This action cannot be undone.`, category.name);
-    hideCategoryContextMenu();
-}
-
-function showItemContextMenu(buttonElement, item) {
-    hideItemContextMenu(); // Hide any existing menu
-    
-    const menu = document.createElement('div');
-    menu.id = 'item-context-menu';
-    menu.className = 'context-menu item-options-popover'; // Reuse styles
-    menu.innerHTML = `
-        <button class="item-rename-ctx">Rename</button>
-        <button class="item-delete-ctx">Delete</button>
+    item.innerHTML = `
+        <div class="progress-history-item-header">
+            <h4>${tracker.name}</h4>
+            <span class="progress-status ${isCompleted ? 'progress-status-completed' : 'progress-status-incomplete'}">
+                ${isCompleted ? 'Completed' : 'Incomplete'}
+            </span>
+        </div>
+        <p class="points-stat">${dateString}</p>
+        <div class="progress-bar-container">
+            <div class="progress-bar-fill" style="width: ${percentage}%; background-image: ${getProgressGradient(percentage)};"></div>
+        </div>
+        <p class="points-stat">${pointsEarned} / ${targetPoints} points (${percentage}%)</p>
     `;
+    
+    item.addEventListener('click', () => openProgressHistoryDetailModal(tracker.id));
+    return item;
+}
 
-    document.body.appendChild(menu);
-    itemContextMenu.element = menu;
-    itemContextMenu.target = buttonElement;
+function openProgressEditorModal(mode, trackerId = null) {
+    currentlyEditingProgressTrackerId = mode === 'edit' ? trackerId : null;
+    const tracker = trackerId ? progressTrackers.find(t => t.id === trackerId) : null;
 
-    menu.querySelector('.item-rename-ctx').onclick = () => {
+    domElements.progressEditorTitle.textContent = mode === 'edit' ? 'Edit Progress Tracker' : 'Add New Progress Tracker';
+    domElements.saveProgressButton.textContent = mode === 'edit' ? 'Save Changes' : 'Create Tracker';
+
+    domElements.progressNameInput.value = tracker ? tracker.name : '';
+    domElements.progressTargetInput.value = tracker ? tracker.targetPoints : '';
+    domElements.progressTypeSelect.value = tracker ? tracker.type : 'daily';
+    
+    if (tracker && tracker.isDefault) {
+        domElements.progressTypeSelect.disabled = true;
+    } else {
+        domElements.progressTypeSelect.disabled = false;
+    }
+
+    if (tracker && tracker.type === 'custom') {
+        domElements.progressStartDate.value = tracker.startDate;
+        domElements.progressEndDate.value = tracker.endDate;
+        domElements.progressCustomDatesContainer.classList.remove('hidden');
+    } else {
+        domElements.progressCustomDatesContainer.classList.add('hidden');
+    }
+
+    domElements.progressEditorModal.classList.add('opening');
+    domElements.progressEditorModal.classList.remove('hidden');
+    domElements.progressNameInput.focus();
+}
+
+function closeProgressEditorModal() {
+    domElements.progressEditorModal.classList.add('hidden');
+    domElements.progressEditorModal.classList.remove('opening');
+    currentlyEditingProgressTrackerId = null;
+}
+
+function handleSaveProgressTracker() {
+    const name = domElements.progressNameInput.value.trim();
+    const targetPoints = parseInt(domElements.progressTargetInput.value, 10);
+    const type = domElements.progressTypeSelect.value;
+    
+    if (!name || isNaN(targetPoints) || targetPoints <= 0) {
+        alert("Please enter a valid name and a positive number for target points.");
+        return;
+    }
+
+    if (currentlyEditingProgressTrackerId) { // Edit mode
+        const tracker = progressTrackers.find(t => t.id === currentlyEditingProgressTrackerId);
+        if (tracker) {
+            tracker.name = name;
+            tracker.targetPoints = targetPoints;
+            if (!tracker.isDefault) {
+                tracker.type = type;
+                if (type === 'custom') {
+                    tracker.startDate = domElements.progressStartDate.value;
+                    tracker.endDate = domElements.progressEndDate.value;
+                }
+            }
+        }
+    } else { // Create mode
+        const newTracker = {
+            id: createUniqueId('progress'),
+            name,
+            targetPoints,
+            type,
+            isDefault: false,
+            isArchived: false,
+            order: progressTrackers.length
+        };
+        if (type === 'custom') {
+            newTracker.startDate = domElements.progressStartDate.value;
+            newTracker.endDate = domElements.progressEndDate.value;
+            if (!newTracker.startDate || !newTracker.endDate || newTracker.endDate < newTracker.startDate) {
+                alert("Please provide a valid start and end date for the custom tracker.");
+                return;
+            }
+        }
+        progressTrackers.push(newTracker);
+    }
+
+    archiveExpiredTrackers(); // Re-check archiving status after edits
+    saveProgressTrackers();
+    renderProgressManagementList();
+    renderMainProgressBars();
+    closeProgressEditorModal();
+}
+
+function handleResetProgressTracker(trackerId) {
+    alert("Reset functionality is being developed. For now, you can edit the tracker's dates to restart it.");
+}
+
+function renderMainProgressBars() {
+    if (!domElements.mobileProgressLocation) return;
+    domElements.mobileProgressLocation.innerHTML = '';
+    
+    const activeTrackers = progressTrackers.filter(t => !t.isArchived).sort((a,b) => a.order - b.order);
+
+    activeTrackers.forEach(tracker => {
+        const { pointsEarned, targetPoints, percentage } = calculateProgressForTracker(tracker);
+        
+        const container = document.createElement('div');
+        container.className = 'progress-container';
+        
+        container.innerHTML = `
+            <h3>${tracker.name}</h3>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" role="progressbar" aria-valuemin="0" aria-valuemax="${targetPoints}" aria-valuenow="${pointsEarned}">${percentage}%</div>
+            </div>
+            <p class="points-stat">${pointsEarned} / ${targetPoints} points</p>
+        `;
+
+        const fill = container.querySelector('.progress-bar-fill');
+        fill.style.width = `${percentage}%`;
+        fill.style.backgroundColor = getProgressFillColor(percentage);
+
+        domElements.mobileProgressLocation.appendChild(container);
+    });
+}
+
+function getTrackerDateRange(tracker) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let startDate, endDate;
+
+    switch (tracker.type) {
+        case 'daily':
+            startDate = today;
+            endDate = today;
+            break;
+        case 'weekly':
+            startDate = new Date(today);
+            const dayOfWeek = today.getDay();
+            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // adjust when day is sunday
+            startDate.setDate(diff);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            break;
+        case 'monthly':
+            startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            break;
+        case 'custom':
+            startDate = new Date(tracker.startDate + 'T00:00:00');
+            endDate = new Date(tracker.endDate + 'T00:00:00');
+            break;
+    }
+    return { startDate, endDate };
+}
+
+function calculateProgressForTracker(tracker) {
+    const { startDate, endDate } = getTrackerDateRange(tracker);
+    const today = getNormalizedDate(new Date());
+    let totalPointsEarned = 0;
+    
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        if (d > today && tracker.type !== 'daily') break;
+        
+        const dateString = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+        const dailyTarget = progressTrackers.find(t => t.type === 'daily')?.targetPoints || 2700;
+        
+        if (d.getTime() === today.getTime()) {
+            totalPointsEarned += calculateProgressForDate(dateString, true, dailyTarget).pointsEarned;
+        } else {
+            const historyData = localStorage.getItem(STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString);
+            if (historyData) {
+                try {
+                    const entry = JSON.parse(historyData);
+                    totalPointsEarned += (entry.pointsEarned || 0);
+                } catch (e) {
+                    console.error(`Failed to parse history for tracker calc on ${dateString}`, e);
+                }
+            }
+        }
+    }
+    
+    const targetPoints = tracker.targetPoints;
+    const percentage = targetPoints > 0 ? Math.min(100, Math.round((totalPointsEarned / targetPoints) * 100)) : 0;
+    
+    return { pointsEarned: totalPointsEarned, targetPoints, percentage };
+}
+
+function archiveExpiredTrackers() {
+    const today = getNormalizedDate(new Date());
+    let wasChanged = false;
+    progressTrackers.forEach(tracker => {
+        if (tracker.isDefault || tracker.isArchived) return;
+        const { endDate } = getTrackerDateRange(tracker);
+        if (endDate < today) {
+            tracker.isArchived = true;
+            wasChanged = true;
+        }
+    });
+    if (wasChanged) {
+        saveProgressTrackers();
+    }
+}
+
+function openProgressHistoryDetailModal(trackerId) {
+    const tracker = progressTrackers.find(t => t.id === trackerId);
+    if (!tracker) return;
+    activeProgressDetailTracker = tracker;
+
+    domElements.progressHistoryDetailTitle.textContent = `Details for ${tracker.name}`;
+    renderProgressHistoryCalendar();
+    renderProgressDailySummary(null); // Render empty initially
+    domElements.progressHistoryDetailModal.classList.add('opening');
+    domElements.progressHistoryDetailModal.classList.remove('hidden');
+}
+
+function closeProgressHistoryDetailModal() {
+    domElements.progressHistoryDetailModal.classList.add('hidden');
+    domElements.progressHistoryDetailModal.classList.remove('opening');
+    activeProgressDetailTracker = null;
+}
+
+function renderProgressHistoryCalendar() {
+    if (!activeProgressDetailTracker) return;
+    const { startDate, endDate } = getTrackerDateRange(activeProgressDetailTracker);
+    const calendarView = domElements.progressHistoryCalendarView;
+    calendarView.innerHTML = `<div id="progress-history-calendar-grid" class="calendar-grid"></div>`;
+    const grid = calendarView.querySelector('#progress-history-calendar-grid');
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const dateString = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
+        const day = d.getDate();
+
+        const cell = document.createElement('div');
+        cell.className = 'calendar-day-cell';
+        cell.dataset.date = dateString;
+        
+        const historyData = localStorage.getItem(STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString);
+        let percentage = 0;
+        if (historyData) {
+            try {
+                percentage = JSON.parse(historyData).percentageCompleted || 0;
+            } catch(e) {/* ignore */}
+        }
+        
+        cell.innerHTML = `
+            <span class="calendar-day-number">${day}</span>
+            <div class="calendar-day-fill" style="height: 100%; opacity: 0.3; background-color: ${getProgressFillColor(percentage)};"></div>
+        `;
+        
+        cell.addEventListener('click', () => {
+            grid.querySelectorAll('.selected').forEach(s => s.classList.remove('selected'));
+            cell.classList.add('selected');
+            renderProgressDailySummary(dateString);
+        });
+        grid.appendChild(cell);
+    }
+}
+
+function renderProgressDailySummary(dateString) {
+    const summaryView = domElements.progressHistoryDailySummary;
+    if (!dateString) {
+        summaryView.innerHTML = '<p>Select a date from the calendar to see details.</p>';
+        return;
+    }
+    
+    const historyData = localStorage.getItem(STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString);
+    if (!historyData) {
+        summaryView.innerHTML = '<p>No data available for this date.</p>';
+        return;
+    }
+    
+    try {
+        const entry = JSON.parse(historyData);
+        const formattedDate = new Date(dateString + 'T00:00:00').toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+        
+        let tasksHtml = '<ul>';
+        if (entry.completedTaskStructure && Object.keys(entry.completedTaskStructure).length > 0) {
+            Object.values(entry.completedTaskStructure).forEach(cat => {
+                tasksHtml += cat.tasks.map(task => `<li>${task}</li>`).join('');
+            });
+        } else {
+            tasksHtml += '<li>No tasks completed.</li>';
+        }
+        tasksHtml += '</ul>';
+
+        summaryView.innerHTML = `
+            <div class="daily-summary-card">
+                <h4>Daily Summary: ${formattedDate}</h4>
+                <p class="points-stat">${entry.pointsEarned || 0} / ${entry.dailyTargetPoints || 2700} points</p>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill" style="width: ${entry.percentageCompleted || 0}%; background-image: ${getProgressGradient(entry.percentageCompleted || 0)};"></div>
+                </div>
+                <div class="daily-summary-tasks">
+                    <h5>Completed Tasks</h5>
+                    ${tasksHtml}
+                </div>
+            </div>
+        `;
+    } catch(e) {
+        summaryView.innerHTML = '<p>Error loading data for this date.</p>';
+    }
+}
+
+
+function showCategoryContextMenu(categoryId, targetElement) {
+    hideItemContextMenu();
+    const menu = domElements.categoryTabContextMenu;
+    if (!menu) return;
+
+    currentContextMenuTargetTab = targetElement;
+    const rect = targetElement.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 5}px`;
+    menu.style.left = `${rect.left}px`;
+    
+    const category = currentCategories.find(c => c.id === categoryId);
+    if(category && category.deletable === false) {
+        menu.querySelector('#ctx-delete-category').disabled = true;
+    } else {
+        menu.querySelector('#ctx-delete-category').disabled = false;
+    }
+
+    menu.dataset.categoryId = categoryId;
+    menu.classList.remove('hidden');
+    menu.querySelector('button').focus();
+}
+
+function hideCategoryContextMenu() {
+    if (domElements.categoryTabContextMenu) {
+        domElements.categoryTabContextMenu.classList.add('hidden');
+    }
+    if (currentContextMenuTargetTab) {
+        const icon = currentContextMenuTargetTab.querySelector('.tab-options-icon');
+        if (icon) icon.classList.remove('visible');
+    }
+    currentContextMenuTargetTab = null;
+}
+
+function showItemContextMenu(targetElement, item) {
+    hideCategoryContextMenu();
+    if(itemContextMenu.element) { hideItemContextMenu(); }
+    
+    const popover = document.createElement('div');
+    popover.className = 'context-menu item-options-popover';
+    
+    popover.innerHTML = `
+        <button data-action="rename">Rename</button>
+        <button data-action="delete">Delete</button>
+    `;
+    popover.querySelector('[data-action="rename"]').onclick = () => {
         openNameEntryModal('rename', item.type, item);
         hideItemContextMenu();
     };
-    menu.querySelector('.item-delete-ctx').onclick = () => {
-        showDeleteConfirmation(item.type, item.id, `Are you sure you want to delete this ${item.type}? This action cannot be undone.`);
+    popover.querySelector('[data-action="delete"]').onclick = () => {
+        showDeleteConfirmation(item.type, item.id, `Are you sure you want to delete this ${item.type}?`);
         hideItemContextMenu();
     };
+    
+    document.body.appendChild(popover);
+    const rect = targetElement.getBoundingClientRect();
+    popover.style.top = `${rect.bottom + 2}px`;
+    popover.style.left = `${rect.left}px`;
 
-    const rect = buttonElement.getBoundingClientRect();
-    menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
-    menu.style.left = `${rect.right + window.scrollX - menu.offsetWidth}px`;
+    itemContextMenu = { element: popover, target: item.id };
+    popover.querySelector('button').focus();
 }
+
 function hideItemContextMenu() {
     if (itemContextMenu.element) {
         itemContextMenu.element.remove();
-        itemContextMenu.element = null;
-        itemContextMenu.target = null;
+        itemContextMenu = { element: null, target: null };
     }
 }
 
+function renderAllCategorySections() {
+    const container = domElements.tabContent;
+    if (!container) return;
+    container.querySelectorAll('section.category-section').forEach(s => s.remove());
+
+    currentCategories.forEach(category => {
+        const sectionTemplate = domElements.categorySectionTemplate.content.cloneNode(true);
+        const sectionElement = sectionTemplate.querySelector('section');
+        sectionElement.id = `category-section-${category.id}`;
+        sectionElement.setAttribute('aria-labelledby', `tab-button-${category.id}`);
+        sectionElement.querySelector('.category-title-text').textContent = category.name;
+        container.appendChild(sectionElement);
+    });
+}
+
+// Initialization function
+function initializeApp() {
+  // Query all DOM elements
+  for (const key in domElements) {
+    const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+    domElements[key] = document.getElementById(id);
+  }
+
+  loadAppData();
+  
+  const savedTheme = localStorage.getItem(STORAGE_KEY_THEME);
+  if (savedTheme && THEMES.map(t=>t.id).includes(savedTheme)) {
+      applyTheme(savedTheme);
+  } else {
+      applyTheme('original');
+  }
+
+  renderTabs();
+  renderAllCategorySections();
+  updateAllProgress();
+  showMainAppView();
+  
+  // Attach Event Listeners
+  domElements.saveNoteButton.addEventListener('click', saveDailyNote);
+  domElements.calendarPrevMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
+  domElements.calendarNextMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
+  domElements.historyModalCloseButton.addEventListener('click', closeHistoryModal);
+  
+  // Month/Year Picker
+  domElements.calendarMonthYearButton.addEventListener('click', toggleMonthYearPicker);
+  domElements.monthYearPickerCloseButton.addEventListener('click', closeMonthYearPicker);
+  domElements.monthYearPickerModal.addEventListener('click', (e) => {
+      if (!domElements.monthYearPickerContent.contains(e.target)) {
+          closeMonthYearPicker();
+      }
+  });
+
+  // History Modal Buttons
+  domElements.expandTasksButton.addEventListener('click', () => openFullscreenContentModal('tasks', currentModalDate));
+  domElements.expandReflectionButton.addEventListener('click', () => openFullscreenContentModal('reflection', currentModalDate));
+  domElements.saveHistoricalNoteButton.addEventListener('click', saveHistoricalNote);
+  domElements.clearHistoricalNoteButton.addEventListener('click', clearHistoricalNote);
+
+  // Fullscreen Modal
+  domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
+
+  // Delete Confirmation Modal
+  domElements.confirmDeleteButton.addEventListener('click', confirmDeletion);
+  domElements.cancelDeleteButton.addEventListener('click', hideDeleteConfirmation);
+  domElements.deleteConfirmationCloseButton.addEventListener('click', hideDeleteConfirmation);
+
+  // Category Creation Modals
+  domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
+  domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
+  domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
+  domElements.selectSpecialCategoryButton.addEventListener('click', () => handleSelectCategoryType('special'));
+  
+  // Name Entry Modal
+  domElements.nameEntryCloseButton.addEventListener('click', closeNameEntryModal);
+  domElements.cancelNameEntryButton.addEventListener('click', closeNameEntryModal);
+  domElements.confirmNameEntryButton.addEventListener('click', handleConfirmNameEntry);
+  domElements.nameEntryInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleConfirmNameEntry(); });
+  
+  // Category Context Menu
+  domElements.ctxRenameCategory.addEventListener('click', () => {
+      const categoryId = domElements.categoryTabContextMenu.dataset.categoryId;
+      const category = currentCategories.find(c => c.id === categoryId);
+      if(category) openNameEntryModal('rename_category', 'category', category);
+      hideCategoryContextMenu();
+  });
+  domElements.ctxDeleteCategory.addEventListener('click', () => {
+      const categoryId = domElements.categoryTabContextMenu.dataset.categoryId;
+      const category = currentCategories.find(c => c.id === categoryId);
+      if(category) showDeleteConfirmation('category', categoryId, `Are you sure you want to delete the category "${category.name}"? All its contents will be lost.`);
+      hideCategoryContextMenu();
+  });
+
+  // Hamburger Menu & Side Panel
+  domElements.hamburgerButton.addEventListener('click', toggleSidePanel);
+  domElements.sidePanelOverlay.addEventListener('click', toggleSidePanel);
+  domElements.menuMainView.addEventListener('click', () => { showMainAppView(); toggleSidePanel(); });
+  domElements.menuActivityDashboard.addEventListener('click', () => { showActivityDashboardView(); toggleSidePanel(); });
+  domElements.menuProgressManagement.addEventListener('click', () => { showProgressManagementView(); toggleSidePanel(); });
+  domElements.menuAppearance.addEventListener('click', toggleThemeDropdown);
+  
+  // Main Tab
+  domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
+
+  // Note Editor
+  domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
+  domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
+  domElements.imageUploadInput.addEventListener('change', (e) => {
+    if (e.target.files && e.target.files[0]) {
+      processAndInsertImage(e.target.files[0]);
+    }
+  });
+
+  // Task List
+  domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
+  domElements.taskListEditButton.addEventListener('click', toggleTaskListEditMode);
+  domElements.taskListResetButton.addEventListener('click', handleResetTasks);
+  domElements.addChecklistItemForm.addEventListener('submit', handleAddChecklistItem);
+
+  // Progress Management
+  domElements.addNewProgressButton.addEventListener('click', () => openProgressEditorModal('create'));
+  domElements.progressEditorCloseButton.addEventListener('click', closeProgressEditorModal);
+  domElements.saveProgressButton.addEventListener('click', handleSaveProgressTracker);
+  domElements.progressTypeSelect.addEventListener('change', (e) => {
+      domElements.progressCustomDatesContainer.classList.toggle('hidden', e.target.value !== 'custom');
+  });
+  domElements.progressHistoryDetailCloseButton.addEventListener('click', closeProgressHistoryDetailModal);
+
+  // Global listeners
+  document.addEventListener('click', (e) => {
+    // Hide add action menu
+    const addActionContainer = document.querySelector('.add-action-container');
+    if (isAddActionMenuOpen && addActionContainer && !addActionContainer.contains(e.target)) {
+        isAddActionMenuOpen = false;
+        addActionContainer.classList.remove('open');
+    }
+    // Hide view mode menu
+    const viewModeContainer = document.querySelector('.view-mode-container');
+    if (viewModeContainer && viewModeContainer.classList.contains('open') && !viewModeContainer.contains(e.target)) {
+        viewModeContainer.classList.remove('open');
+    }
+    // Hide context menus
+    if (domElements.categoryTabContextMenu && !domElements.categoryTabContextMenu.contains(e.target) && !e.target.closest('.tab-options-icon')) {
+        hideCategoryContextMenu();
+    }
+    if (itemContextMenu.element && !itemContextMenu.element.contains(e.target) && !e.target.closest('.item-more-options')) {
+        hideItemContextMenu();
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (domElements.sidePanelMenu.classList.contains('open')) { toggleSidePanel(); }
+      else if (!domElements.historyModal.classList.contains('hidden')) { closeHistoryModal(); }
+      else if (!domElements.monthYearPickerModal.classList.contains('hidden')) { closeMonthYearPicker(); }
+      else if (!domElements.deleteConfirmationModal.classList.contains('hidden')) { hideDeleteConfirmation(); }
+      else if (!domElements.fullscreenContentModal.classList.contains('hidden')) { closeFullscreenContentModal(); }
+      else if (!domElements.nameEntryModal.classList.contains('hidden')) { closeNameEntryModal(); }
+      else if (!domElements.chooseCategoryTypeModal.classList.contains('hidden')) { closeChooseCategoryTypeModal(); }
+      else if (!domElements.noteEditorModal.classList.contains('hidden')) { closeNoteEditorModal(); }
+      else if (!domElements.taskListModal.classList.contains('hidden')) { closeTaskListModal(); }
+      else if (!domElements.progressEditorModal.classList.contains('hidden')) { closeProgressEditorModal(); }
+      else if (!domElements.progressHistoryDetailModal.classList.contains('hidden')) { closeProgressHistoryDetailModal(); }
+      hideCategoryContextMenu();
+      hideItemContextMenu();
+    }
+  });
+}
 
 document.addEventListener('DOMContentLoaded', initializeApp);
-window.addEventListener('beforeunload', () => {
-    if (currentlyEditingNote) {
-        closeNoteEditorModal();
-    }
-    if (currentlyEditingTaskList) {
-        closeTaskListModal();
-    }
-});
