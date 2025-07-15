@@ -30,13 +30,43 @@
             <ul>
                 <li><button id="menu-main-view" class="side-panel-item">Main</button></li>
                 <li><button id="menu-activity-dashboard" class="side-panel-item">Activity Dashboard</button></li>
-                <li><button id="menu-appearance" class="side-panel-item">Appearance</button></li>
+                <li><button id="menu-progress-management" class="side-panel-item">Progress Management</button></li>
+                <li id="appearance-menu-item-container">
+                    <button id="menu-appearance" class="side-panel-item">
+                        <span>Appearance</span>
+                        <svg class="appearance-arrow" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"></path></svg>
+                    </button>
+                    <div id="theme-dropdown-container" class="theme-dropdown-container">
+                        <!-- Theme options will be populated by JS -->
+                    </div>
+                </li>
             </ul>
         </nav>
     </div>
     <div id="side-panel-overlay" class="side-panel-overlay hidden"></div>
 
     <div id="app-container">
+        <div id="progress-management-view" class="hidden">
+            <header class="progress-management-header">
+                <h1>Progress Management</h1>
+            </header>
+            <main id="progress-management-list">
+                <section id="active-progress-section" class="progress-section">
+                    <h2 class="progress-section-title">Active Trackers</h2>
+                    <div id="active-progress-list" class="progress-list-container"></div>
+                </section>
+                <section id="archived-progress-section" class="progress-section">
+                    <h2 class="progress-section-title">Progress History</h2>
+                    <div id="archived-progress-list" class="progress-list-container"></div>
+                </section>
+            </main>
+             <footer id="progress-management-footer">
+                <button id="add-new-progress-button" class="fab-button" aria-label="Add new progress tracker">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
+                </button>
+            </footer>
+        </div>
+
         <div id="app-view-wrapper"> 
             <div id="main-content-wrapper">
                 <div id="left-column">
@@ -57,11 +87,11 @@
                             <!-- 1. Calendar Section -->
                             <div id="calendar-container">
                                 <div id="calendar-header">
-                                    <button id="calendar-prev-month" class="calendar-nav-button" aria-label="Previous month">&lt;</button>
+                                    <button id="calendar-prev-month-button" class="calendar-nav-button" aria-label="Previous month">&lt;</button>
                                     <button id="calendar-month-year-button" class="calendar-month-year-button" aria-label="Open month year picker" aria-haspopup="dialog">
                                         <span id="calendar-month-year"></span>
                                     </button>
-                                    <button id="calendar-next-month" class="calendar-nav-button" aria-label="Next month">&gt;</button>
+                                    <button id="calendar-next-month-button" class="calendar-nav-button" aria-label="Next month">&gt;</button>
                                 </div>
                                 <div id="calendar-grid">
                                     <!-- Calendar days will be populated by JS -->
@@ -77,20 +107,7 @@
 
                             <!-- 3. Progress Section -->
                             <div id="mobile-progress-location">
-                                <div id="today-progress-container"> 
-                                    <h3>Today's Progress</h3>
-                                    <div class="progress-bar-container">
-                                        <div id="today-progress-fill" class="progress-bar-fill" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</div>
-                                    </div>
-                                    <p id="today-points-stat" class="points-stat">0 / 2700 points</p>
-                                </div>
-                                <div id="current-week-progress-container">
-                                    <h3>Weekly Progress</h3>
-                                    <div class="progress-bar-container">
-                                        <div id="current-week-progress-fill" class="progress-bar-fill" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">0%</div>
-                                    </div>
-                                    <p id="current-week-points-stat" class="points-stat">0 / 20000 points</p>
-                                </div>
+                                <!-- Progress bars are now dynamically generated by JS -->
                             </div>
                             
                         </section>
@@ -113,14 +130,50 @@
     </div> <!-- End App Container -->
 
     <!-- Modals and Templates -->
-    <div id="theme-choice-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="theme-choice-title">
+
+    <div id="progress-history-detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="progress-history-detail-title">
+        <div class="modal-content fullscreen-modal-content-box">
+            <button id="progress-history-detail-close-button" class="close-button" aria-label="Close Progress Details">&times;</button>
+            <h3 id="progress-history-detail-title" class="fullscreen-modal-title-text">Progress Details</h3>
+            <div class="progress-history-detail-content">
+                <div id="progress-history-calendar-view" class="progress-history-detail-panel">
+                    <!-- Calendar or date list will be rendered here -->
+                </div>
+                <div id="progress-history-daily-summary" class="progress-history-detail-panel">
+                    <!-- Daily summary will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="progress-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="progress-editor-title">
         <div class="modal-content">
-            <button id="theme-choice-close-button" class="close-button" aria-label="Close theme choice">&times;</button>
-            <h3 id="theme-choice-title" class="modal-title-text">Choose Appearance</h3>
-            <p class="modal-description">Select your preferred theme for the application.</p>
+            <button id="progress-editor-close-button" class="close-button" aria-label="Close progress editor">&times;</button>
+            <h3 id="progress-editor-title" class="modal-title-text">Edit Progress Tracker</h3>
+            <div class="progress-editor-form">
+                <label for="progress-name-input">Tracker Name</label>
+                <input type="text" id="progress-name-input" class="modal-input" placeholder="e.g., Fitness Sprint">
+                
+                <label for="progress-target-input">Target Points</label>
+                <input type="number" id="progress-target-input" class="modal-input" placeholder="e.g., 10000">
+                
+                <label for="progress-type-select">Duration Type</label>
+                <select id="progress-type-select" class="modal-input">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="custom">Custom</option>
+                </select>
+                
+                <div id="progress-custom-dates-container" class="hidden">
+                    <label for="progress-start-date">Start Date</label>
+                    <input type="date" id="progress-start-date" class="modal-input">
+                    <label for="progress-end-date">End Date</label>
+                    <input type="date" id="progress-end-date" class="modal-input">
+                </div>
+            </div>
             <div class="modal-actions-centered">
-                <button id="select-original-theme-button" class="modal-button">Original Theme</button>
-                <button id="select-flip-clock-theme-button" class="modal-button">Dark Theme</button>
+                <button id="save-progress-button" class="modal-button-primary">Save Changes</button>
             </div>
         </div>
     </div>
