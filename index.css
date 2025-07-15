@@ -536,11 +536,6 @@ header h1 {
     background-color: var(--accent-purple-bg-faint);
 }
 
-.tab-button.special-category-tab .notification-badge,
-.tab-button.special-category-tab.category-complete-indicator::after {
-    display: none !important;
-}
-
 .tab-options-icon {
     display: none;
     flex-direction: column;
@@ -652,61 +647,28 @@ main#tab-content > section.hidden {
 }
 
 .notification-badge {
-    background-color: var(--accent-red);
-    color: white;
-    font-size: 0.7em;
-    padding: 2px 6px;
-    border-radius: 10px;
-    margin-left: 8px;
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    background-color: #FF3B30; /* iOS red, theme-independent */
+    color: #FFFFFF;
+    font-family: 'Poppins', sans-serif;
+    font-size: 11px;
     font-weight: 600;
-    box-shadow: var(--glow-red);
-    animation: badgeAppear 0.3s ease-out;
-}
-@keyframes badgeAppear {
-    from { transform: scale(0.5); opacity: 0; }
-    to { transform: scale(1); opacity: 1; }
-}
-.tab-button.show-badge-highlight .notification-badge {
-    animation: badgePulse 0.4s ease-out;
-}
-@keyframes badgePulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.15); box-shadow: 0 0 8px rgba(255, 107, 107, 0.9);}
-    100% { transform: scale(1); }
+    line-height: 1;
+    height: 16px;
+    min-width: 16px;
+    padding: 2px 4px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+    border: 1px solid var(--panel-bg-dark); /* To make it pop a bit */
 }
 
-[data-theme="flip-clock"] .tab-button.show-badge-highlight .notification-badge {
-    animation: none;
-}
-
-.category-complete-indicator::after {
-    content: '✔';
-    color: var(--accent-success);
-    font-size: 1em;
-    margin-left: 8px;
-    font-weight: bold;
-    text-shadow: var(--glow-success);
-    animation: checkAppear 0.3s ease-out;
-}
-@keyframes checkAppear {
-    from { transform: scale(0.3) rotate(-180deg); opacity: 0; }
-    to { transform: scale(1) rotate(0deg); opacity: 1; }
-}
-.tab-button.show-badge-highlight.category-complete-indicator::after {
-    animation: checkPulse 0.4s ease-out;
-}
-@keyframes checkPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.2); text-shadow: 0 0 8px rgba(127, 255, 212, 0.9); }
-    100% { transform: scale(1); }
-}
-
-[data-theme="flip-clock"] .category-complete-indicator::after {
-    text-shadow: none;
-    color: var(--text-primary);
-}
-[data-theme="flip-clock"] .tab-button.show-badge-highlight.category-complete-indicator::after {
-    animation: none;
+[data-theme="flip-clock"] .notification-badge {
+    border-color: #111111;
 }
 
 /* Calendar Styling */
