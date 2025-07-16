@@ -234,30 +234,45 @@ const domElements = {
 };
 
 function getProgressFillColor(percentage) {
-    if (currentTheme === 'flip-clock') {
-        return '#FFFFFF';
-    }
     const p = Math.max(0, Math.min(100, percentage));
     const hue = (p / 100) * 120; // 0 = red, 120 = green
     return `hsl(${hue}, 100%, 50%)`;
 }
 
 function getProgressGradient(percentage) {
-    if (currentTheme === 'flip-clock' || currentTheme === 'power-safe') {
-        return getProgressFillColor(percentage);
-    }
     const p = Math.max(0, Math.min(100, percentage));
     const midPoint = Math.max(5, Math.min(95, p));
     const color = getProgressFillColor(p);
     return `linear-gradient(90deg, #ff6b6b 0%, #ffd700 ${midPoint}%, ${color} 100%)`;
 }
 
-function getTodayDateString() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
+/**
+ * A helper function to consistently apply progress bar styling based on the current theme.
+ * @param {HTMLElement} element The fill element of the progress bar.
+ * @param {number} percentage The completion percentage (0-100).
+ */
+function applyProgressStyles(element, percentage) {
+    if (!element) return;
+    
+    if (currentTheme === 'original') {
+        element.style.backgroundImage = getProgressGradient(percentage);
+        element.style.backgroundColor = ''; // Clear solid color fallback
+    } else { // 'power-safe' and 'flip-clock' themes
+        element.style.backgroundColor = getProgressFillColor(percentage);
+        element.style.backgroundImage = 'none'; // Clear gradient
+    }
+}
+
+
+function formatDateToString(date) {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function getTodayDateString() {
+  return formatDateToString(new Date());
 }
 
 function getNormalizedDate(date) {
@@ -438,6 +453,15 @@ function loadProgressTrackers() {
     if (storedTrackers) {
         try {
             progressTrackers = JSON.parse(storedTrackers);
+             // Migration: remove isDefault property
+            let needsSave = false;
+            progressTrackers.forEach(t => {
+                if (t.isDefault !== undefined) {
+                    delete t.isDefault;
+                    needsSave = true;
+                }
+            });
+            if (needsSave) saveProgressTrackers();
             return;
         } catch (e) {
             console.error("Error parsing progress trackers:", e);
@@ -446,8 +470,8 @@ function loadProgressTrackers() {
     
     // If no trackers, create defaults
     progressTrackers = [
-        { id: 'progress-daily', name: "Today's Progress", type: 'daily', targetPoints: 2700, isDefault: true, order: 0 },
-        { id: 'progress-weekly', name: "Weekly Progress", type: 'weekly', targetPoints: 20000, isDefault: true, order: 1 }
+        { id: 'progress-daily', name: "Today's Progress", type: 'daily', targetPoints: 2700, order: 0 },
+        { id: 'progress-weekly', name: "Weekly Progress", type: 'weekly', targetPoints: 20000, order: 1 }
     ];
     saveProgressTrackers();
 }
@@ -852,18 +876,27 @@ function scheduleMidnightTask() {
 }
 
 function showDeleteConfirmation(type, id, message, nameForConfirmation = '') {
-    const found = findItemAndParent(id);
-    const parentId = found?.parent?.id;
+    let finalMessage = message;
 
+    if (type === 'progressTracker') {
+         const tracker = progressTrackers.find(t => t.id === id);
+         finalMessage = `Are you sure you want to delete the tracker "${tracker.name}"? This action cannot be undone.`
+         if (tracker && (tracker.type === 'daily' || tracker.type === 'weekly')) {
+            finalMessage = `Are you sure you want to delete the "${tracker.name}" tracker? This may affect historical data and progress calculations. This action cannot be undone.`;
+         }
+    }
+    
     if (type === 'progressTracker' || type === 'scheduledTask') {
          itemToDelete = { type, id };
     } else {
+        const found = findItemAndParent(id);
+        const parentId = found?.parent?.id;
         itemToDelete = { type, id, nameForConfirmation, parentId };
     }
     
     if (domElements.deleteConfirmationModal) {
         domElements.deleteConfirmationModal.classList.add('opening');
-        if(domElements.deleteConfirmationMessage) domElements.deleteConfirmationMessage.textContent = message;
+        if(domElements.deleteConfirmationMessage) domElements.deleteConfirmationMessage.textContent = finalMessage || `Are you sure you want to delete this? This action cannot be undone.`;
         if(domElements.deleteConfirmationTitle) domElements.deleteConfirmationTitle.textContent = `Confirm Deletion`;
         domElements.deleteConfirmationModal.classList.remove('hidden');
         if (domElements.confirmDeleteButton) domElements.confirmDeleteButton.focus();
@@ -1819,10 +1852,88 @@ function calculateProgressForDate(dateString, standardOnlyStats = false, targetP
   };
 }
 
+function getWeekDates(forDate = new Date()) {
+    const date = new Date(forDate);
+    const dayOfWeek = date.getDay(); // 0 = Sunday
+    const startDate = new Date(date);
+    startDate.setDate(date.getDate() - dayOfWeek);
+    
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+        const weekDay = new Date(startDate);
+        weekDay.setDate(startDate.getDate() + i);
+        weekDates.push(formatDateToString(weekDay));
+    }
+    return weekDates;
+}
+
+function calculateProgressForPeriod(tracker) {
+    const today = new Date();
+    const todayStr = formatDateToString(today);
+    let datesInRange = [];
+    
+    switch(tracker.type) {
+        case 'daily':
+            datesInRange.push(todayStr);
+            break;
+        case 'weekly': {
+            const weekDates = getWeekDates(today);
+            for(const dateStr of weekDates) {
+                datesInRange.push(dateStr);
+                if (dateStr === todayStr) break;
+            }
+            break;
+        }
+        case 'monthly': {
+             const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+             const daysInMonth = (new Date(today.getFullYear(), today.getMonth() + 1, 0)).getDate();
+             for (let i = 1; i <= daysInMonth; i++) {
+                 const date = new Date(today.getFullYear(), today.getMonth(), i);
+                 const dateStr = formatDateToString(date);
+                 if (getNormalizedDate(date) > today) break;
+                 datesInRange.push(dateStr);
+             }
+             break;
+        }
+        case 'custom': {
+            if (tracker.startDate && tracker.endDate) {
+                let currentDate = getNormalizedDate(new Date(tracker.startDate));
+                const endDate = getNormalizedDate(new Date(tracker.endDate));
+                while(currentDate <= endDate) {
+                    if (currentDate > today) break;
+                    datesInRange.push(formatDateToString(currentDate));
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+            break;
+        }
+        default:
+            return { pointsEarned: 0, percentage: 0, totalPoints: tracker.targetPoints };
+    }
+
+    let totalPointsEarned = 0;
+    datesInRange.forEach(dateString => {
+        const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
+        const historyData = localStorage.getItem(historyKey);
+        if (historyData) {
+            try {
+                const entry = JSON.parse(historyData);
+                totalPointsEarned += (entry.pointsEarned || 0);
+            } catch (e) {
+                console.error(`Error parsing history for ${dateString}:`, e);
+            }
+        }
+    });
+
+    const totalPoints = tracker.targetPoints;
+    const percentage = totalPoints > 0 ? Math.round((totalPointsEarned / totalPoints) * 100) : 0;
+
+    return { pointsEarned: Math.round(totalPointsEarned), percentage, totalPoints };
+}
+
 function renderMainProgressBars() {
     if (!domElements.mobileProgressLocation) return;
     domElements.mobileProgressLocation.innerHTML = '';
-    const today = getTodayDateString();
 
     const activeTrackers = progressTrackers.filter(t => !t.isArchived).sort((a,b) => a.order - b.order);
 
@@ -1839,18 +1950,7 @@ function renderMainProgressBars() {
         container.className = 'progress-container';
         container.dataset.trackerId = tracker.id;
         
-        let pointsEarned = 0, percentage = 0, totalPoints = tracker.targetPoints;
-        
-        // This is a simplified calculation logic. A full implementation would need to
-        // query history for weekly/monthly/custom ranges.
-        if (tracker.type === 'daily') {
-            const progress = calculateProgressForDate(today, true, tracker.targetPoints);
-            pointsEarned = progress.pointsEarned;
-            percentage = progress.percentage;
-        } else {
-            // Placeholder logic for other types
-            percentage = totalPoints > 0 ? Math.round((pointsEarned / totalPoints) * 100) : 0;
-        }
+        const { pointsEarned, percentage, totalPoints } = calculateProgressForPeriod(tracker);
         
         container.innerHTML = `
             <h3>${tracker.name}</h3>
@@ -1861,12 +1961,7 @@ function renderMainProgressBars() {
         `;
         
         const fillEl = container.querySelector('.progress-bar-fill');
-        if (currentTheme === 'original') {
-            fillEl.style.backgroundImage = getProgressGradient(percentage);
-        } else { // power-safe and flip-clock
-            fillEl.style.backgroundColor = getProgressFillColor(percentage);
-            fillEl.style.backgroundImage = 'none'; // Remove gradient if theme was switched
-        }
+        applyProgressStyles(fillEl, percentage);
         domElements.mobileProgressLocation.appendChild(container);
     });
 }
@@ -1915,12 +2010,7 @@ function updateDashboardSummaries() {
 
         const fillEl = summaryDiv.querySelector('.progress-bar-fill');
         fillEl.style.width = `${percentage}%`;
-
-        if (currentTheme === 'original') {
-            fillEl.style.backgroundImage = getProgressGradient(percentage);
-        } else {
-            fillEl.style.backgroundColor = getProgressFillColor(percentage);
-        }
+        applyProgressStyles(fillEl, percentage);
 
         if (totalItems > 0 && completedItems === totalItems) {
             summaryDiv.querySelector('.category-stats').classList.add('fully-completed');
@@ -2017,7 +2107,7 @@ function renderCalendar() {
             const fillEl = cell.querySelector('.calendar-day-fill');
             if (fillEl) {
                 fillEl.style.height = `${percentage}%`;
-                fillEl.style.backgroundColor = getProgressFillColor(percentage);
+                applyProgressStyles(fillEl, percentage);
             }
             if (percentage > 75) {
                 cell.classList.add('high-fill');
@@ -2098,10 +2188,12 @@ function openHistoryModal(dateString) {
 
     domElements.historyModalPointsValue.textContent = points;
     domElements.historyModalPointsTotal.textContent = totalPoints;
-    domElements.historyPercentageProgressFill.style.width = `${percentage}%`;
-    domElements.historyPercentageProgressFill.style.backgroundColor = getProgressFillColor(percentage);
-    domElements.historyPercentageProgressFill.textContent = `${percentage}%`;
-    domElements.historyPercentageProgressFill.setAttribute('aria-valuenow', percentage);
+    
+    const fillEl = domElements.historyPercentageProgressFill;
+    fillEl.style.width = `${percentage}%`;
+    applyProgressStyles(fillEl, percentage);
+    fillEl.textContent = `${percentage}%`;
+    fillEl.setAttribute('aria-valuenow', percentage);
 
     // Completed Tasks
     domElements.historyTasksList.innerHTML = '';
@@ -2996,26 +3088,13 @@ function createProgressTrackerItemEl(tracker) {
             <p>Target: ${tracker.targetPoints} points, Duration: ${tracker.type}</p>
         </div>
         <div class="progress-tracker-actions">
-             ${!tracker.isDefault ? `<button class="icon-button item-edit" title="Edit"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>` : ''}
-            <button class="icon-button item-archive" title="Archive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm8-6h-2v2H9v-2H7v-2h2V9h2v2h2v2z"></path></svg></button>
-            ${!tracker.isDefault ? `<button class="icon-button item-delete" title="Delete"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>` : ''}
+            <button class="icon-button item-edit" title="Edit"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>
+            <button class="icon-button item-delete" title="Delete"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>
         </div>
     `;
-    const editBtn = itemEl.querySelector('.item-edit');
-    if(editBtn) editBtn.addEventListener('click', () => openProgressEditor(tracker.id));
-
-    const archiveBtn = itemEl.querySelector('.item-archive');
-    archiveBtn.addEventListener('click', () => {
-        if(confirm(`Are you sure you want to archive the tracker "${tracker.name}"?`)) {
-            tracker.isArchived = true;
-            saveProgressTrackers();
-            renderProgressManagementList();
-        }
-    });
-
-    const deleteBtn = itemEl.querySelector('.item-delete');
-    if (deleteBtn) deleteBtn.addEventListener('click', () => {
-        showDeleteConfirmation('progressTracker', tracker.id, `Are you sure you want to delete the tracker "${tracker.name}"?`);
+    itemEl.querySelector('.item-edit').addEventListener('click', () => openProgressEditor(tracker.id));
+    itemEl.querySelector('.item-delete').addEventListener('click', () => {
+        showDeleteConfirmation('progressTracker', tracker.id);
     });
     return itemEl;
 }
@@ -3113,38 +3192,38 @@ function updateTimeProgress() {
     const totalDuration = endOfDay.getTime() - startOfDay.getTime();
     const elapsedTime = now.getTime() - startOfDay.getTime();
 
-    let percentage = (elapsedTime / totalDuration) * 100;
-    percentage = Math.max(0, Math.min(100, percentage));
+    let percentageUsed = (elapsedTime / totalDuration) * 100;
+    percentageUsed = Math.max(0, Math.min(100, percentageUsed));
 
     const timeBar = domElements.timeProgressBar;
-    timeBar.style.width = `${percentage}%`;
+    timeBar.style.width = `${percentageUsed}%`;
+    
+    // Color goes from green (start of day) to red (end of day).
+    // This means we color based on time REMAINING. 100% remaining = green. 0% remaining = red.
+    const percentageRemaining = 100 - percentageUsed;
+    applyProgressStyles(timeBar, percentageRemaining);
 
     const remainingTimeMs = Math.max(0, endOfDay.getTime() - now.getTime());
     const remainingHours = Math.floor(remainingTimeMs / (1000 * 60 * 60));
     const remainingMinutes = Math.floor((remainingTimeMs % (1000 * 60 * 60)) / (1000 * 60));
     
-    domElements.timeProgressPercentage.textContent = `${Math.round(percentage)}% of time used`;
+    domElements.timeProgressPercentage.textContent = `${Math.round(percentageUsed)}% of time used`;
     domElements.timeProgressRemaining.textContent = `${remainingHours}h ${remainingMinutes}m remaining`;
-
-    // Time bar color
-    // Color goes from green (100% time left) to red (0% time left).
-    // So we use getProgressFillColor with the inverse of the percentage of time used.
-    timeBar.style.backgroundColor = getProgressFillColor(100 - percentage);
-    timeBar.style.backgroundImage = 'none'; // Ensure no gradient is applied
 
     // Task progress bar
     const dailyTracker = progressTrackers.find(t => t.type === 'daily');
-    const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
-    const progress = calculateProgressForDate(getTodayDateString(), true, dailyTarget);
-    
-    domElements.modalTaskProgressBar.style.width = `${progress.percentage}%`;
-    if (currentTheme === 'original') {
-        domElements.modalTaskProgressBar.style.backgroundImage = getProgressGradient(progress.percentage);
+    if (dailyTracker) {
+        const progress = calculateProgressForPeriod(dailyTracker);
+        const modalTaskBar = domElements.modalTaskProgressBar;
+        modalTaskBar.style.width = `${progress.percentage}%`;
+        applyProgressStyles(modalTaskBar, progress.percentage);
+        domElements.modalTaskProgressStats.textContent = `${progress.pointsEarned} / ${progress.totalPoints} Points (${progress.percentage}%)`;
     } else {
-        domElements.modalTaskProgressBar.style.backgroundColor = getProgressFillColor(progress.percentage);
+        const modalTaskBar = domElements.modalTaskProgressBar;
+        modalTaskBar.style.width = `0%`;
+        applyProgressStyles(modalTaskBar, 0);
+        domElements.modalTaskProgressStats.textContent = `No daily tracker found.`;
     }
-    
-    domElements.modalTaskProgressStats.textContent = `${progress.pointsEarned} / ${dailyTarget} Points (${progress.percentage}%)`;
 }
 
 // --- Init ---
