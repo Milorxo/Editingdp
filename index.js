@@ -32,11 +32,20 @@ const STORAGE_KEY_LAST_MONTH_PROCESSED = 'lifeTrackerLastMonthProcessed';
 const USER_CATEGORIES_KEY = 'lifeTrackerUserCategories_v2'; 
 const APP_CONTENT_KEY = 'lifeTrackerAppContent_v1'; // Hierarchical content structure
 const CHECKLIST_ITEM_STATE_KEY_PREFIX = 'lifeTrackerChecklistState_';
+const SCHEDULED_TASK_COMPLETION_KEY_PREFIX = 'lifeTrackerScheduledTaskCompletion_';
 const STORAGE_KEY_VIEW_MODE = 'lifeTrackerViewMode';
 const STORAGE_KEY_THEME = 'lifeTrackerTheme';
 const STORAGE_KEY_PROGRESS_TRACKERS = 'lifeTrackerProgressTrackers_v1';
 const STORAGE_KEY_SCHEDULED_TASKS = 'lifeTrackerScheduledTasks_v1';
 
+const SCHEDULED_TASK_COLORS = [
+    { id: 'default', 'value': 'var(--text-primary)' },
+    { id: 'red', 'value': '#E57373' },
+    { id: 'green', 'value': '#81C784' },
+    { id: 'blue', 'value': '#64B5F6' },
+    { id: 'purple', 'value': '#BA68C8' },
+    { id: 'yellow', 'value': '#FFD54F' }
+];
 
 let currentCategories = []; 
 let appContent = {}; // Main data structure for all items (folders, notes, tasks)
@@ -207,6 +216,8 @@ const domElements = {
   scheduledTaskEditorTitle: null,
   scheduledTaskEditorInput: null,
   scheduledTaskEditorDateInput: null,
+  scheduledTaskRecurrenceSelect: null,
+  scheduledTaskColorPicker: null,
   saveScheduledTaskButton: null,
 
   imageUploadInput: null,
@@ -268,6 +279,39 @@ function getChecklistItemStateStorageKey(date, checklistItemId) {
   return `${CHECKLIST_ITEM_STATE_KEY_PREFIX}${date}_${checklistItemId}`;
 }
 
+function getScheduledTaskCompletionKey(date, taskId) {
+    return `${SCHEDULED_TASK_COMPLETION_KEY_PREFIX}${date}_${taskId}`;
+}
+
+function getScheduledTasksForDate(dateStringToMatch) {
+    const targetDate = getNormalizedDate(new Date(dateStringToMatch + 'T00:00:00'));
+    const matchingTasks = [];
+
+    scheduledTasks.forEach(task => {
+        const startDate = getNormalizedDate(new Date(task.date + 'T00:00:00'));
+
+        if (startDate > targetDate) {
+            return; // Task recurrence hasn't started yet.
+        }
+
+        if (task.recurrence === 'none' || !task.recurrence) {
+            if (task.date === dateStringToMatch) {
+                matchingTasks.push(task);
+            }
+        } else if (task.recurrence === 'weekly') {
+            if (startDate.getDay() === targetDate.getDay()) {
+                matchingTasks.push(task);
+            }
+        } else if (task.recurrence === 'monthly') {
+            if (startDate.getDate() === targetDate.getDate()) {
+                 matchingTasks.push(task);
+            }
+        }
+    });
+    return matchingTasks;
+}
+
+
 function getAllTaskListFiles(items) {
     let taskListFiles = [];
     for (const item of items) {
@@ -310,9 +354,11 @@ function updateTodaysHistoryEntry() {
       }
     });
 
-    const completedScheduledTasks = scheduledTasks
-        .filter(t => t.date === today && t.completedOn === today)
+    const todaysScheduledTasks = getScheduledTasksForDate(today);
+    const completedScheduledTasks = todaysScheduledTasks
+        .filter(t => localStorage.getItem(getScheduledTaskCompletionKey(today, t.id)) === 'true')
         .map(t => t.text);
+
     if (completedScheduledTasks.length > 0) {
         completedTasksTodayStruct.scheduled = {
             name: "Scheduled Tasks",
@@ -415,6 +461,15 @@ function loadScheduledTasks() {
     if (storedTasks) {
         try {
             scheduledTasks = JSON.parse(storedTasks);
+            // Migration: Ensure old tasks have a color property
+            let needsSave = false;
+            scheduledTasks.forEach(t => {
+                if (!t.color) {
+                    t.color = SCHEDULED_TASK_COLORS.find(c => c.id === 'default').value;
+                    needsSave = true;
+                }
+            });
+            if (needsSave) saveScheduledTasks();
             return;
         } catch (e) {
             console.error("Error parsing scheduled tasks:", e);
@@ -666,9 +721,11 @@ function saveDayToHistory(dateToSave) {
       }
     });
 
-    const completedScheduledTasks = scheduledTasks
-        .filter(t => t.date === dateToSave && t.completedOn === dateToSave)
+    const scheduledTasksForDate = getScheduledTasksForDate(dateToSave);
+    const completedScheduledTasks = scheduledTasksForDate
+        .filter(t => localStorage.getItem(getScheduledTaskCompletionKey(dateToSave, t.id)) === 'true')
         .map(t => t.text);
+
     if (completedScheduledTasks.length > 0) {
         completedTasksHistory.scheduled = {
             name: "Scheduled Tasks",
@@ -701,6 +758,10 @@ function saveDayToHistory(dateToSave) {
             });
         });
     });
+    // Clear scheduled task completion for the day
+    scheduledTasks.forEach(t => {
+        localStorage.removeItem(getScheduledTaskCompletionKey(dateToSave, t.id));
+    });
     
     console.log(`[History] Finalized and states cleared for ${dateToSave}.`);
 }
@@ -716,9 +777,9 @@ function checkAndClearOldMonthlyData() {
   localStorage.setItem(STORAGE_KEY_LAST_MONTH_PROCESSED, currentMonthYear);
 }
 
-
 function loadAppData() {
   seedInitialDataIfNeeded(); 
+  loadScheduledTasks();
   
   const savedViewMode = localStorage.getItem(STORAGE_KEY_VIEW_MODE);
   if (savedViewMode && ['large', 'medium', 'detail'].includes(savedViewMode)) {
@@ -752,6 +813,7 @@ function loadAppData() {
   checkAndClearOldMonthlyData();
   archiveExpiredTrackers();
   loadCurrentDayNote(); 
+  renderTodaysScheduledTasks();
   
   calendarDisplayDate = new Date(); 
   calendarDisplayDate.setDate(1); 
@@ -868,6 +930,196 @@ function hideDeleteConfirmation() {
     }
     itemToDelete = null;
 }
+
+// --- SCHEDULED TASKS FUNCTIONS ---
+
+function openScheduledTaskEditor(taskId = null) {
+    currentlyEditingScheduledTaskId = taskId;
+    
+    domElements.scheduledTaskColorPicker.innerHTML = '';
+    SCHEDULED_TASK_COLORS.forEach(color => {
+        const button = document.createElement('button');
+        button.className = 'color-option';
+        button.dataset.color = color.value;
+        button.style.backgroundColor = color.value;
+        button.setAttribute('aria-label', color.id);
+        domElements.scheduledTaskColorPicker.appendChild(button);
+    });
+
+    if (taskId) {
+        const task = scheduledTasks.find(t => t.id === taskId);
+        if (task) {
+            domElements.scheduledTaskEditorInput.value = task.text;
+            domElements.scheduledTaskEditorDateInput.value = task.date;
+            domElements.scheduledTaskRecurrenceSelect.value = task.recurrence || 'none';
+            domElements.scheduledTaskEditorTitle.textContent = 'Edit Scheduled Task';
+            const selectedColorButton = domElements.scheduledTaskColorPicker.querySelector(`[data-color="${task.color}"]`);
+            if(selectedColorButton) selectedColorButton.classList.add('selected');
+        }
+    } else {
+        domElements.scheduledTaskEditorInput.value = '';
+        domElements.scheduledTaskEditorDateInput.value = getTodayDateString();
+        domElements.scheduledTaskRecurrenceSelect.value = 'none';
+        domElements.scheduledTaskEditorTitle.textContent = 'New Scheduled Task';
+        domElements.scheduledTaskColorPicker.querySelector('[data-color="var(--text-primary)"]').classList.add('selected');
+    }
+
+    domElements.scheduledTaskEditorModal.classList.add('opening');
+    domElements.scheduledTaskEditorModal.classList.remove('hidden');
+    domElements.scheduledTaskEditorInput.focus();
+}
+
+function closeScheduledTaskEditor() {
+    domElements.scheduledTaskEditorModal.classList.add('hidden');
+    domElements.scheduledTaskEditorModal.classList.remove('opening');
+    currentlyEditingScheduledTaskId = null;
+}
+
+function saveScheduledTask() {
+    const text = domElements.scheduledTaskEditorInput.value.trim();
+    if (!text) {
+        alert('Task description cannot be empty.');
+        return;
+    }
+    const date = domElements.scheduledTaskEditorDateInput.value;
+    const recurrence = domElements.scheduledTaskRecurrenceSelect.value;
+    const selectedColorEl = domElements.scheduledTaskColorPicker.querySelector('.selected');
+    const color = selectedColorEl ? selectedColorEl.dataset.color : SCHEDULED_TASK_COLORS.find(c => c.id === 'default').value;
+    
+    if (currentlyEditingScheduledTaskId) {
+        const task = scheduledTasks.find(t => t.id === currentlyEditingScheduledTaskId);
+        if (task) {
+            task.text = text;
+            task.date = date;
+            task.recurrence = recurrence;
+            task.color = color;
+        }
+    } else {
+        const newTask = {
+            id: createUniqueId('scheduletask'),
+            text,
+            date,
+            recurrence,
+            color
+        };
+        scheduledTasks.push(newTask);
+    }
+    saveScheduledTasks();
+    
+    if (currentActiveViewId === 'scheduled-tasks') {
+        renderScheduledTasksManagementList();
+    }
+    renderCalendar(); 
+    renderTodaysScheduledTasks(); 
+    updateTodaysHistoryEntry();
+    updateAllProgress();
+
+    closeScheduledTaskEditor();
+}
+
+function renderTodaysScheduledTasks() {
+    if (!domElements.scheduledTasksTodayList || !domElements.scheduledTasksTodayContainer) return;
+    
+    const today = getTodayDateString();
+    const todaysTasks = getScheduledTasksForDate(today);
+
+    if (todaysTasks.length === 0) {
+        domElements.scheduledTasksTodayContainer.classList.add('hidden');
+        return;
+    }
+
+    domElements.scheduledTasksTodayContainer.classList.remove('hidden');
+    domElements.scheduledTasksTodayList.innerHTML = '';
+
+    todaysTasks.forEach(task => {
+        const li = document.createElement('li');
+        li.className = 'checklist-item';
+        li.dataset.scheduledTaskId = task.id;
+        li.style.borderLeftColor = task.color || 'var(--panel-border)';
+        
+        const isCompleted = localStorage.getItem(getScheduledTaskCompletionKey(today, task.id)) === 'true';
+        if(isCompleted) li.classList.add('completed');
+
+        li.innerHTML = `
+            <input type="checkbox" class="checklist-item-checkbox" ${isCompleted ? 'checked' : ''}>
+            <span class="checklist-item-text">${task.text}</span>
+        `;
+        
+        li.addEventListener('click', (e) => {
+             if (e.target.type === 'checkbox') return;
+             const checkbox = li.querySelector('.checklist-item-checkbox');
+             checkbox.checked = !checkbox.checked;
+             const changeEvent = new Event('change', { bubbles: true });
+             checkbox.dispatchEvent(changeEvent);
+        });
+
+        li.querySelector('.checklist-item-checkbox').addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            localStorage.setItem(getScheduledTaskCompletionKey(today, task.id), isChecked);
+
+            updateTodaysHistoryEntry();
+            updateAllProgress();
+            li.classList.toggle('completed', isChecked);
+            li.classList.add('animate-task-toggle');
+            setTimeout(() => li.classList.remove('animate-task-toggle'), 300);
+        });
+
+        domElements.scheduledTasksTodayList.appendChild(li);
+    });
+}
+
+function renderScheduledTasksManagementList() {
+    if (!domElements.scheduledTasksListContainer) return;
+    domElements.scheduledTasksListContainer.innerHTML = '';
+
+    if (scheduledTasks.length === 0) {
+        domElements.scheduledTasksListContainer.innerHTML = '<p class="empty-tasks-message">No scheduled tasks yet. Add one using the button below.</p>';
+        return;
+    }
+
+    const tasksByDate = scheduledTasks.reduce((acc, task) => {
+        const date = task.date;
+        if (!acc[date]) acc[date] = [];
+        acc[date].push(task);
+        return acc;
+    }, {});
+
+    const sortedDates = Object.keys(tasksByDate).sort((a, b) => new Date(a) - new Date(b));
+
+    sortedDates.forEach(date => {
+        const dateGroupDiv = document.createElement('div');
+        dateGroupDiv.className = 'scheduled-task-date-group';
+
+        const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+        
+        dateGroupDiv.innerHTML = `<h2 class="scheduled-task-date-header">${formattedDate}</h2>`;
+
+        tasksByDate[date].forEach(task => {
+            const itemEl = document.createElement('div');
+            itemEl.className = 'scheduled-task-item';
+            
+            itemEl.innerHTML = `
+                <p>${task.text} ${task.recurrence && task.recurrence !== 'none' ? `(Repeats ${task.recurrence})` : ''}</p>
+                <div class="scheduled-task-item-actions">
+                    <button class="icon-button item-rename" title="Edit"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>
+                    <button class="icon-button item-delete" title="Delete"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>
+                </div>
+            `;
+
+            itemEl.querySelector('.item-rename').addEventListener('click', () => openScheduledTaskEditor(task.id));
+            itemEl.querySelector('.item-delete').addEventListener('click', () => {
+                showDeleteConfirmation('scheduledTask', task.id, `Are you sure you want to delete the scheduled task: "${task.text}"? This will remove all future recurrences as well.`);
+            });
+            
+            dateGroupDiv.appendChild(itemEl);
+        });
+
+        domElements.scheduledTasksListContainer.appendChild(dateGroupDiv);
+    });
+}
+
 
 function renderCategorySectionContent(categoryId) {
     const sectionElement = document.getElementById(`category-section-${categoryId}`);
@@ -1488,6 +1740,35 @@ function switchTab(categoryIdToActivate) {
     }
 }
 
+function switchView(viewId) {
+    currentActiveViewId = viewId;
+    
+    const isMainView = viewId === 'main' || viewId === 'activity-dashboard';
+    
+    domElements.appViewWrapper.classList.toggle('hidden', !isMainView);
+    domElements.progressManagementView.classList.toggle('hidden', viewId !== 'progress-management');
+    domElements.scheduledTasksView.classList.toggle('hidden', viewId !== 'scheduled-tasks');
+    
+    domElements.dashboardColumn.classList.toggle('hidden', viewId !== 'activity-dashboard');
+
+    document.querySelectorAll('.side-panel-item').forEach(item => item.classList.remove('active-menu-item'));
+    const activeMenuItem = document.getElementById(`menu-${viewId}`);
+    if (activeMenuItem) {
+        activeMenuItem.classList.add('active-menu-item');
+    }
+
+    if (viewId === 'progress-management') {
+        renderProgressManagementList();
+    } else if (viewId === 'scheduled-tasks') {
+        renderScheduledTasksManagementList();
+    } else if (viewId === 'activity-dashboard') {
+        updateDashboardSummaries();
+    }
+
+    closeSidePanel();
+}
+
+
 function calculateProgressForDate(dateString, standardOnlyStats = false, targetPoints) {
   let completedCount = 0;
   let totalTasksForCalc = 0;
@@ -1519,8 +1800,8 @@ function calculateProgressForDate(dateString, standardOnlyStats = false, targetP
   });
 
   // Include scheduled tasks in the calculation for standard-only stats
-  const scheduledTasksForDate = scheduledTasks.filter(t => t.date === dateString);
-  const completedScheduled = scheduledTasksForDate.filter(t => t.completedOn === dateString).length;
+  const scheduledTasksForDate = getScheduledTasksForDate(dateString);
+  const completedScheduled = scheduledTasksForDate.filter(t => localStorage.getItem(getScheduledTaskCompletionKey(dateString, t.id)) === 'true').length;
   totalStandardTasksCount += scheduledTasksForDate.length;
   if(standardOnlyStats) {
       totalTasksForCalc += scheduledTasksForDate.length;
@@ -1537,6 +1818,58 @@ function calculateProgressForDate(dateString, standardOnlyStats = false, targetP
     totalTasks: totalTasksForCalc, totalStandardTasks: totalStandardTasksCount
   };
 }
+
+function renderMainProgressBars() {
+    if (!domElements.mobileProgressLocation) return;
+    domElements.mobileProgressLocation.innerHTML = '';
+    const today = getTodayDateString();
+
+    const activeTrackers = progressTrackers.filter(t => !t.isArchived).sort((a,b) => a.order - b.order);
+
+    if (activeTrackers.length === 0) {
+        const container = document.createElement('div');
+        container.className = 'progress-container';
+        container.innerHTML = `<p class="empty-tasks-message" style="padding: 20px;">No active progress trackers. You can add one in Progress Management.</p>`;
+        domElements.mobileProgressLocation.appendChild(container);
+        return;
+    }
+
+    activeTrackers.forEach(tracker => {
+        const container = document.createElement('div');
+        container.className = 'progress-container';
+        container.dataset.trackerId = tracker.id;
+        
+        let pointsEarned = 0, percentage = 0, totalPoints = tracker.targetPoints;
+        
+        // This is a simplified calculation logic. A full implementation would need to
+        // query history for weekly/monthly/custom ranges.
+        if (tracker.type === 'daily') {
+            const progress = calculateProgressForDate(today, true, tracker.targetPoints);
+            pointsEarned = progress.pointsEarned;
+            percentage = progress.percentage;
+        } else {
+            // Placeholder logic for other types
+            percentage = totalPoints > 0 ? Math.round((pointsEarned / totalPoints) * 100) : 0;
+        }
+        
+        container.innerHTML = `
+            <h3>${tracker.name}</h3>
+            <div class="progress-bar-container">
+                <div class="progress-bar-fill" style="width: ${percentage}%;" role="progressbar" aria-valuenow="${percentage}" aria-valuemin="0" aria-valuemax="100">${percentage}%</div>
+            </div>
+            <p class="points-stat progress-value">${pointsEarned} / ${totalPoints} Points</p>
+        `;
+        
+        const fillEl = container.querySelector('.progress-bar-fill');
+        if (currentTheme === 'original' || currentTheme === 'power-safe') {
+            fillEl.style.backgroundColor = getProgressFillColor(percentage);
+        } else { // flip-clock
+            fillEl.style.backgroundColor = getProgressFillColor(percentage);
+        }
+        domElements.mobileProgressLocation.appendChild(container);
+    });
+}
+
 
 function updateDashboardSummaries() {
     if (!domElements.dashboardSummaries) return;
@@ -1660,19 +1993,12 @@ function renderCalendar() {
         }
 
         if (cellDate > today) {
-            cell.classList.add('future-day');
-        } else {
-            cell.setAttribute('role', 'button');
-            cell.setAttribute('tabindex', '0');
-            cell.setAttribute('aria-label', `View history for ${monthName} ${day}`);
-            cell.addEventListener('click', () => openHistoryModal(dateString));
-            cell.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    openHistoryModal(dateString);
-                }
-            });
-
-            // Add progress fill
+             cell.classList.add('future-day');
+             cell.style.opacity = '1';
+        } 
+        
+        // Add progress fill for past days
+        if (cellDate < today) {
             const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
             const historyData = localStorage.getItem(historyKey);
             if (historyData) {
@@ -1691,13 +2017,32 @@ function renderCalendar() {
             }
         }
         
-        // Add scheduled task indicator
-        const hasTasks = scheduledTasks.some(task => task.date === dateString);
-        if (hasTasks) {
-            const indicator = document.createElement('div');
-            indicator.className = 'scheduled-task-indicator';
-            cell.appendChild(indicator);
+        if (cellDate <= today) {
+            cell.setAttribute('role', 'button');
+            cell.setAttribute('tabindex', '0');
+            cell.setAttribute('aria-label', `View history for ${monthName} ${day}`);
+            cell.addEventListener('click', () => openHistoryModal(dateString));
+            cell.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    openHistoryModal(dateString);
+                }
+            });
         }
+        
+        // Add scheduled task indicator dots for all applicable days
+        const tasksForDay = getScheduledTasksForDate(dateString);
+        if (tasksForDay.length > 0) {
+            const dotContainer = document.createElement('div');
+            dotContainer.className = 'calendar-dot-container';
+            tasksForDay.slice(0, 4).forEach(task => {
+                const dot = document.createElement('div');
+                dot.className = 'calendar-task-dot';
+                dot.style.backgroundColor = task.color;
+                dotContainer.appendChild(dot);
+            });
+            cell.appendChild(dotContainer);
+        }
+
 
         domElements.calendarGrid.appendChild(cell);
     }
@@ -2017,6 +2362,9 @@ function applyTheme(theme) {
 function saveTheme(theme) {
     localStorage.setItem(STORAGE_KEY_THEME, theme);
     applyTheme(theme);
+    if (domElements.timeProgressModal && !domElements.timeProgressModal.classList.contains('hidden')) {
+        updateTimeProgress();
+    }
     updateAllProgress(); // Re-render elements with dynamic colors
 }
 
@@ -2059,84 +2407,252 @@ function renderThemeDropdown() {
 }
 
 
-function generateDefaultName(type, parentList) {
-    const baseNameMap = {
-        folder: 'New Folder',
-        note: 'Note File',
-        tasklist: 'Task List',
-        category: 'New Category'
-    };
-    const baseName = baseNameMap[type] || 'New Item';
-    let counter = 1;
-    let newName = `${baseName} ${counter}`;
-    
-    const existingNames = new Set(parentList.map(item => item.name));
+function generateDefaultName(type, existingItems) {
+    let baseName = '';
+    if (type === 'category') baseName = 'New Category';
+    else if (type === 'folder') baseName = 'New Folder';
+    else if (type === 'note') baseName = 'New Note';
+    else if (type === 'tasklist') baseName = 'New Task List';
+    else baseName = 'New Item';
 
-    while (existingNames.has(newName)) {
-        counter++;
-        newName = `${baseName} ${counter}`;
+    if (!existingItems.some(item => item.name === baseName)) {
+        return baseName;
     }
-    return newName;
+
+    let i = 2;
+    while (existingItems.some(item => item.name === `${baseName} ${i}`)) {
+        i++;
+    }
+    return `${baseName} ${i}`;
 }
 
-function openNameEntryModal(mode, type, existingItem = null, defaultName = '') {
-    if (!domElements.nameEntryModal) return;
-    domElements.nameEntryModal.classList.add('opening');
-    
-    // Merge with existing data for multi-step flows (like category creation)
-    tempItemCreationData = { ...tempItemCreationData, mode, type, existingItem };
-
-    let title = 'Name Your Item';
-    let cta = 'Confirm';
-    let placeholder = 'Enter name';
-    let existingName = '';
-
-    if (mode === 'create') {
-        title = `Create New ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-        cta = `Create ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-        placeholder = `Enter ${type} name`;
-    } else if (mode === 'rename' && existingItem) {
-        title = `Rename ${type.charAt(0).toUpperCase() + type.slice(1)}`;
-        cta = 'Rename';
-        existingName = existingItem.name;
-    } else if (mode === 'rename_category' && existingItem) {
-        title = `Rename Category`;
-        cta = 'Rename';
-        existingName = existingItem.name;
+function initialize() {
+    // Populate domElements object
+    for (const key in domElements) {
+        const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
+        domElements[key] = document.getElementById(id);
     }
 
-    domElements.nameEntryTitle.textContent = title;
-    domElements.confirmNameEntryButton.textContent = cta;
-    domElements.nameEntryInput.placeholder = placeholder;
-    domElements.nameEntryInput.value = existingName || defaultName;
+    // Load data and initial render
+    loadAppData();
 
+    // Apply theme
+    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'original';
+    applyTheme(savedTheme);
+
+    // Initial render of dynamic content
+    renderTabs();
+    renderAllCategorySections();
+    switchTab('dashboard'); // Start on the dashboard
+    updateAllProgress();
+
+    // Event listeners
+    setupEventListeners();
+
+    console.log("Application initialized.");
+}
+
+function renderAllCategorySections() {
+    if (!domElements.categorySectionTemplate || !domElements.tabContent) return;
+    currentCategories.forEach(category => {
+        const categorySectionClone = domElements.categorySectionTemplate.content.cloneNode(true);
+        const section = categorySectionClone.querySelector('section');
+        section.id = `category-section-${category.id}`;
+        section.setAttribute('aria-labelledby', `tab-button-${category.id}`);
+        domElements.tabContent.appendChild(section);
+    });
+}
+
+function setupEventListeners() {
+    // Hamburger Menu & Side Panel
+    domElements.hamburgerButton.addEventListener('click', toggleSidePanel);
+    domElements.sidePanelOverlay.addEventListener('click', closeSidePanel);
+    domElements.menuMainView.addEventListener('click', () => switchView('main'));
+    domElements.menuActivityDashboard.addEventListener('click', () => switchView('activity-dashboard'));
+    domElements.menuProgressManagement.addEventListener('click', () => switchView('progress-management'));
+    domElements.menuScheduledTasks.addEventListener('click', () => switchView('scheduled-tasks'));
+    domElements.appearanceMenuItemContainer.addEventListener('click', toggleThemeDropdown);
+
+
+    // Main UI
+    domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
+    domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
+    domElements.saveNoteButton.addEventListener('click', saveDailyNote);
+
+    // Category Context Menu
+    domElements.ctxRenameCategory.addEventListener('click', handleRenameCategoryFromContextMenu);
+    domElements.ctxDeleteCategory.addEventListener('click', handleDeleteCategoryFromContextMenu);
+
+    // Calendar
+    domElements.calendarPrevMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
+    domElements.calendarNextMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
+    domElements.calendarMonthYearButton.addEventListener('click', toggleMonthYearPicker);
+
+    // Month/Year Picker Modal
+    domElements.monthYearPickerCloseButton.addEventListener('click', closeMonthYearPicker);
+    domElements.monthYearPickerModal.addEventListener('click', (e) => {
+        if (e.target === domElements.monthYearPickerModal) {
+            closeMonthYearPicker();
+        }
+    });
+
+    // History Modal
+    domElements.historyModalCloseButton.addEventListener('click', closeHistoryModal);
+    domElements.saveHistoricalNoteButton.addEventListener('click', saveHistoricalNote);
+    domElements.clearHistoricalNoteButton.addEventListener('click', clearHistoricalNote);
+    domElements.expandTasksButton.addEventListener('click', () => openFullscreenContentModal('tasks', currentModalDate));
+    domElements.expandReflectionButton.addEventListener('click', () => openFullscreenContentModal('reflection', currentModalDate));
+    
+    // Fullscreen Modal
+    domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
+
+    // Delete Confirmation Modal
+    domElements.deleteConfirmationCloseButton.addEventListener('click', hideDeleteConfirmation);
+    domElements.confirmDeleteButton.addEventListener('click', confirmDeletion);
+    domElements.cancelDeleteButton.addEventListener('click', hideDeleteConfirmation);
+
+    // Category Type Modal
+    domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
+    domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
+    domElements.selectSpecialCategoryButton.addEventListener('click', () => handleSelectCategoryType('special'));
+
+    // Name Entry Modal
+    domElements.nameEntryCloseButton.addEventListener('click', closeNameEntryModal);
+    domElements.confirmNameEntryButton.addEventListener('click', handleConfirmNameEntry);
+    domElements.cancelNameEntryButton.addEventListener('click', closeNameEntryModal);
+    domElements.nameEntryInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') handleConfirmNameEntry();
+    });
+
+    // Note Editor Modal
+    domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
+    domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
+    domElements.imageUploadInput.addEventListener('change', (e) => {
+        if(e.target.files && e.target.files[0]) {
+            processAndInsertImage(e.target.files[0]);
+        }
+    });
+
+
+    // Task List Modal
+    domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
+    domElements.taskListEditButton.addEventListener('click', toggleTaskListEditMode);
+    domElements.taskListResetButton.addEventListener('click', handleResetTasks);
+    domElements.addChecklistItemForm.addEventListener('submit', handleAddChecklistItem);
+    
+    // Scheduled Tasks
+    domElements.addNewScheduledTaskButton.addEventListener('click', () => openScheduledTaskEditor());
+    domElements.scheduledTaskEditorCloseButton.addEventListener('click', closeScheduledTaskEditor);
+    domElements.saveScheduledTaskButton.addEventListener('click', saveScheduledTask);
+    domElements.scheduledTaskColorPicker.addEventListener('click', e => {
+        if (e.target.classList.contains('color-option')) {
+            domElements.scheduledTaskColorPicker.querySelectorAll('.color-option').forEach(btn => btn.classList.remove('selected'));
+            e.target.classList.add('selected');
+        }
+    });
+
+
+    // Progress Management
+    domElements.addNewProgressButton.addEventListener('click', () => openProgressEditor());
+    domElements.progressEditorCloseButton.addEventListener('click', closeProgressEditor);
+    domElements.saveProgressButton.addEventListener('click', saveProgressTracker);
+    domElements.progressTypeSelect.addEventListener('change', () => {
+        domElements.progressCustomDatesContainer.classList.toggle('hidden', domElements.progressTypeSelect.value !== 'custom');
+    });
+    domElements.progressHistoryDetailCloseButton.addEventListener('click', closeProgressHistoryDetailModal);
+
+
+    // Time vs Progress Modal
+    domElements.timeProgressButton.addEventListener('click', openTimeProgressModal);
+    domElements.timeProgressCloseButton.addEventListener('click', closeTimeProgressModal);
+
+    // Global listeners
+    document.addEventListener('click', (e) => {
+        // Close add action menu if clicking outside
+        const addActionContainer = document.querySelector('.add-action-container.open');
+        if (addActionContainer && !addActionContainer.contains(e.target)) {
+            addActionContainer.classList.remove('open');
+            isAddActionMenuOpen = false;
+        }
+
+        // Close context menus if clicking outside
+        if (domElements.categoryTabContextMenu && !domElements.categoryTabContextMenu.contains(e.target)) {
+            hideCategoryContextMenu();
+        }
+        if (itemContextMenu.element && !itemContextMenu.element.contains(e.target)) {
+            hideItemContextMenu();
+        }
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const openModal = document.querySelector('.modal:not(.hidden)');
+            if (openModal) {
+                const closeButton = openModal.querySelector('.close-button');
+                if (closeButton) closeButton.click();
+            }
+            hideCategoryContextMenu();
+            hideItemContextMenu();
+        }
+    });
+}
+
+function handleRenameCategoryFromContextMenu() {
+    if (!currentContextMenuTargetTab) return;
+    const categoryId = currentContextMenuTargetTab.dataset.categoryId;
+    const category = getCategoryById(categoryId);
+    openNameEntryModal('rename', 'category', category, category.name);
+    hideCategoryContextMenu();
+}
+
+function handleDeleteCategoryFromContextMenu() {
+    if (!currentContextMenuTargetTab) return;
+    const categoryId = currentContextMenuTargetTab.dataset.categoryId;
+    const category = getCategoryById(categoryId);
+    showDeleteConfirmation('category', categoryId, `Are you sure you want to delete the category "${category.name}" and all its contents? This action cannot be undone.`);
+    hideCategoryContextMenu();
+}
+
+function openNameEntryModal(mode, type, item = null, defaultName = '') {
+    // mode: 'create' or 'rename'
+    // type: 'category', 'folder', 'note', 'tasklist'
+    tempItemCreationData = { mode, type, itemToRename: item };
+
+    domElements.nameEntryTitle.textContent = `${mode === 'create' ? 'Create' : 'Rename'} ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+    domElements.confirmNameEntryButton.textContent = mode === 'create' ? 'Create' : 'Rename';
+    domElements.nameEntryInput.value = defaultName;
+
+    domElements.nameEntryModal.classList.add('opening');
     domElements.nameEntryModal.classList.remove('hidden');
     domElements.nameEntryInput.focus();
     domElements.nameEntryInput.select();
 }
+
 function closeNameEntryModal() {
-    if (domElements.nameEntryModal) {
-        domElements.nameEntryModal.classList.add('hidden');
-        domElements.nameEntryModal.classList.remove('opening');
-    }
+    domElements.nameEntryModal.classList.add('hidden');
+    domElements.nameEntryModal.classList.remove('opening');
     tempItemCreationData = null;
 }
+
 function handleConfirmNameEntry() {
-    if (!tempItemCreationData || !domElements.nameEntryInput) return;
     const name = domElements.nameEntryInput.value.trim();
-    if (!name) { alert("Name cannot be empty."); return; }
+    if (!name) {
+        alert("Name cannot be empty.");
+        return;
+    }
+    
+    const { mode, type, itemToRename } = tempItemCreationData;
 
-    const { mode, type, existingItem, categoryType } = tempItemCreationData;
-
-    if (type === 'category') {
-        if (mode === 'create') {
-            if (currentCategories.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-                alert(`A category named "${name}" already exists.`);
-                return;
-            }
+    if (mode === 'create') {
+        const parentList = getItemsForPath(currentPath);
+        
+        if (type === 'category') {
             const newCategory = {
-                id: createUniqueId('cat'), name: name, order: currentCategories.length,
-                deletable: true, type: categoryType || 'standard'
+                id: createUniqueId('cat'),
+                name: name,
+                order: currentCategories.length,
+                deletable: true,
+                type: tempItemCreationData.categoryType || 'standard'
             };
             currentCategories.push(newCategory);
             saveUserCategories(currentCategories);
@@ -2145,176 +2661,430 @@ function handleConfirmNameEntry() {
             renderTabs();
             renderAllCategorySections();
             switchTab(newCategory.id);
-        } else if (mode === 'rename_category' && existingItem) {
-            const category = currentCategories.find(c => c.id === existingItem.id);
-            if (category) {
-                 if (currentCategories.some(c => c.id !== category.id && c.name.toLowerCase() === name.toLowerCase())) {
-                    alert(`A category named "${name}" already exists.`);
-                    return;
-                }
-                category.name = name;
-                saveUserCategories(currentCategories);
-                
-                const tabButton = document.getElementById(`tab-button-${category.id}`);
-                if (tabButton && tabButton.firstChild.nodeType === Node.TEXT_NODE) {
-                    tabButton.firstChild.nodeValue = name;
-                }
-                const categorySection = document.querySelector(`#category-section-${category.id}`);
-                if(categorySection) {
-                    const titleEl = categorySection.querySelector('.category-title-text');
-                    if (titleEl) titleEl.textContent = name;
+        } else { // folder, note, or tasklist
+            const newItem = {
+                id: createUniqueId(type),
+                type: type,
+                name: name,
+                order: parentList.length,
+                content: (type === 'folder' || type === 'tasklist') ? [] : '',
+            };
+            parentList.push(newItem);
+            saveAppContent();
+            renderCategorySectionContent(currentPath[0].id);
+        }
+    } else if (mode === 'rename') {
+        if (type === 'category') {
+            itemToRename.name = name;
+            saveUserCategories(currentCategories);
+            renderTabs();
+            // Update the title in the section header if it's the current tab
+            if (activeTabId === itemToRename.id) {
+                const section = document.getElementById(`category-section-${itemToRename.id}`);
+                if (section) {
+                    section.querySelector('.category-title-text').textContent = name;
                 }
             }
+        } else { // folder, note, tasklist
+             const itemInfo = findItemAndParent(itemToRename.id);
+             if (itemInfo) {
+                itemInfo.item.name = name;
+                saveAppContent();
+                renderCategorySectionContent(currentPath[0].id);
+             }
         }
-        closeNameEntryModal();
-        return;
     }
 
-    let itemWasChanged = false;
-    if (mode === 'create') {
-        const parentList = getItemsForPath(currentPath);
-        const newItem = {
-            id: createUniqueId(type), name: name, type: type, order: parentList.length
-        };
-        if (type === 'folder') newItem.content = [];
-        else if (type === 'note') newItem.content = '';
-        else if (type === 'tasklist') newItem.content = [];
-        parentList.push(newItem);
-        itemWasChanged = true;
-    } else if (mode === 'rename' && existingItem) {
-        const found = findItemAndParent(existingItem.id);
-        if (found) {
-            found.item.name = name;
-            itemWasChanged = true;
-            const itemEl = document.querySelector(`.item[data-item-id="${existingItem.id}"]`);
-            if (itemEl) {
-                const nameEl = itemEl.querySelector('.item-name');
-                if (nameEl) nameEl.textContent = name;
-            }
-        }
-    }
-    
-    if (itemWasChanged) {
-        saveAppContent();
-        if (mode === 'create') { // Only re-render grid for new items
-           renderCategorySectionContent(currentPath[0].id);
-        }
-        updateAllProgress();
-    }
     closeNameEntryModal();
 }
 
+function hideCategoryContextMenu() {
+    if (domElements.categoryTabContextMenu) domElements.categoryTabContextMenu.classList.add('hidden');
+    const visibleIcon = document.querySelector('.tab-options-icon.visible');
+    if (visibleIcon) visibleIcon.classList.remove('visible');
+    currentContextMenuTargetTab = null;
+}
 
-// Hamburger Menu Logic
+function showCategoryContextMenu(categoryId, tabButton) {
+    const category = getCategoryById(categoryId);
+    if (!category) return;
+    hideCategoryContextMenu(); // Hide any other open menus
+    
+    currentContextMenuTargetTab = tabButton;
+
+    const rect = tabButton.getBoundingClientRect();
+    domElements.categoryTabContextMenu.style.top = `${rect.bottom + 5}px`;
+    domElements.categoryTabContextMenu.style.left = `${rect.left}px`;
+    
+    domElements.ctxDeleteCategory.disabled = category.deletable === false;
+    domElements.ctxDeleteCategory.title = category.deletable === false ? "Default categories cannot be deleted." : "";
+
+    domElements.categoryTabContextMenu.classList.remove('hidden');
+    tabButton.querySelector('.tab-options-icon')?.classList.add('visible');
+}
+
+function showItemContextMenu(button, item) {
+    hideItemContextMenu(); // Close any other open menu
+
+    const popover = document.createElement('div');
+    popover.className = 'context-menu item-options-popover';
+    popover.setAttribute('role', 'menu');
+
+    // Create Rename button
+    const renameBtn = document.createElement('button');
+    renameBtn.setAttribute('role', 'menuitem');
+    renameBtn.textContent = 'Rename';
+    renameBtn.onclick = (e) => {
+        e.stopPropagation();
+        openNameEntryModal('rename', item.type, item);
+        hideItemContextMenu();
+    };
+
+    // Create Delete button
+    const deleteBtn = document.createElement('button');
+    deleteBtn.setAttribute('role', 'menuitem');
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.onclick = (e) => {
+        e.stopPropagation();
+        showDeleteConfirmation(item.type, item.id, `Are you sure you want to delete this ${item.type}? This action cannot be undone.`);
+        hideItemContextMenu();
+    };
+    
+    popover.appendChild(renameBtn);
+    popover.appendChild(deleteBtn);
+
+    document.body.appendChild(popover);
+
+    // Position the popover
+    const buttonRect = button.getBoundingClientRect();
+    const popoverRect = popover.getBoundingClientRect();
+    
+    let top = buttonRect.bottom + 5;
+    let left = buttonRect.left;
+
+    // Adjust if it goes off-screen
+    if (left + popoverRect.width > window.innerWidth - 10) {
+        left = window.innerWidth - popoverRect.width - 10;
+    }
+    if (top + popoverRect.height > window.innerHeight - 10) {
+        top = buttonRect.top - popoverRect.height - 5;
+    }
+
+    popover.style.top = `${top}px`;
+    popover.style.left = `${left}px`;
+
+    itemContextMenu.element = popover;
+    itemContextMenu.target = item;
+}
+
+function hideItemContextMenu() {
+    if (itemContextMenu.element) {
+        itemContextMenu.element.remove();
+        itemContextMenu = { element: null, target: null };
+    }
+}
+
 function toggleSidePanel() {
     const isOpen = domElements.hamburgerButton.classList.toggle('open');
-    domElements.hamburgerButton.setAttribute('aria-expanded', isOpen.toString());
     domElements.sidePanelMenu.classList.toggle('open');
+    domElements.sidePanelOverlay.classList.toggle('hidden');
+    domElements.hamburgerButton.setAttribute('aria-expanded', isOpen.toString());
     domElements.sidePanelMenu.setAttribute('aria-hidden', (!isOpen).toString());
-    domElements.sidePanelOverlay.classList.toggle('hidden', !isOpen);
+}
 
-    if (isOpen) {
-        const menuItems = domElements.sidePanelMenu.querySelectorAll('.side-panel-item');
-        menuItems.forEach(item => item.classList.remove('active-menu-item'));
-        
-        let activeMenuItem = null;
-        if (currentActiveViewId === 'main') {
-            activeMenuItem = domElements.menuMainView;
-        } else if (currentActiveViewId === 'activity-dashboard') {
-            activeMenuItem = domElements.menuActivityDashboard;
-        } else if (currentActiveViewId === 'progress-management') {
-            activeMenuItem = domElements.menuProgressManagement;
-        } else if (currentActiveViewId === 'scheduled-tasks') {
-            activeMenuItem = domElements.menuScheduledTasks;
-        }
-        
-        if (activeMenuItem) {
-            activeMenuItem.classList.add('active-menu-item');
-        }
+function closeSidePanel() {
+    domElements.hamburgerButton.classList.remove('open');
+    domElements.sidePanelMenu.classList.remove('open');
+    domElements.sidePanelOverlay.classList.add('hidden');
+    domElements.hamburgerButton.setAttribute('aria-expanded', 'false');
+    domElements.sidePanelMenu.setAttribute('aria-hidden', 'true');
+}
+
+
+function handleDragStart(e, item) {
+    // Prevents dragging if an input/button inside has focus
+    if (document.activeElement !== document.body && e.target.contains(document.activeElement)) {
+        e.preventDefault();
+        return;
+    }
+    draggedItemId = item.id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', item.id);
+    setTimeout(() => {
+        e.target.style.opacity = '0.5';
+    }, 0);
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    const targetFolderEl = e.target.closest('.item.type-folder');
+    if (targetFolderEl) {
+        targetFolderEl.classList.add('drag-over');
     }
 }
 
-function switchView(viewId) {
-    if (currentActiveViewId === viewId) return; // No change
-    currentActiveViewId = viewId;
-
-    domElements.appViewWrapper.classList.toggle('hidden', viewId !== 'main' && viewId !== 'activity-dashboard');
-    domElements.progressManagementView.classList.toggle('hidden', viewId !== 'progress-management');
-    domElements.scheduledTasksView.classList.toggle('hidden', viewId !== 'scheduled-tasks');
-
-    if (viewId === 'main' || viewId === 'activity-dashboard') {
-        const showDashboard = viewId === 'activity-dashboard';
-        domElements.dashboardColumn.classList.toggle('hidden', !showDashboard);
-        domElements.mainContentWrapper.style.width = showDashboard ? '50%' : '100%';
-        updateAllProgress(); 
+function handleDragLeave(e) {
+    const targetFolderEl = e.target.closest('.item.type-folder');
+    if (targetFolderEl) {
+        targetFolderEl.classList.remove('drag-over');
     }
-
-    if (viewId === 'progress-management') {
-        renderProgressManagementList();
-    }
-    if (viewId === 'scheduled-tasks') {
-        renderScheduledTasksManagementList();
-    }
-
-    toggleSidePanel(); // Close menu after selection
 }
 
-// --- Time vs Progress Modal Logic ---
-function updateTimeProgressView() {
-    if (!domElements.timeProgressModal || domElements.timeProgressModal.classList.contains('hidden')) {
+function handleDrop(e, targetFolderItem) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const targetFolderEl = e.target.closest('.item.type-folder');
+    if (targetFolderEl) {
+        targetFolderEl.classList.remove('drag-over');
+    }
+    
+    if (!draggedItemId || draggedItemId === targetFolderItem.id) {
+        draggedItemId = null;
+        renderCategorySectionContent(currentPath[0].id); // Redraw to reset opacity
         return;
     }
 
-    const now = new Date();
-    const startOfDay = new Date();
-    startOfDay.setHours(5, 30, 0, 0); // 5:30 AM
-    const endOfDay = new Date();
-    endOfDay.setHours(21, 30, 0, 0); // 9:30 PM (16 hours total)
+    const { item: draggedItem, parentList: sourceParentList } = findItemAndParent(draggedItemId);
 
-    const totalWindowMs = endOfDay.getTime() - startOfDay.getTime();
-    let elapsedMs = now.getTime() - startOfDay.getTime();
-    let remainingMs = endOfDay.getTime() - now.getTime();
+    if (draggedItem && sourceParentList) {
+        // Remove from source
+        const itemIndex = sourceParentList.findIndex(i => i.id === draggedItemId);
+        sourceParentList.splice(itemIndex, 1);
 
-    if (now < startOfDay) { // Before 5:30 AM
-        elapsedMs = 0;
-        remainingMs = totalWindowMs;
-    } else if (now > endOfDay) { // After 9:30 PM
-        elapsedMs = totalWindowMs;
-        remainingMs = 0;
+        // Add to destination
+        if (!targetFolderItem.content) {
+            targetFolderItem.content = [];
+        }
+        draggedItem.order = targetFolderItem.content.length;
+        targetFolderItem.content.push(draggedItem);
+        
+        saveAppContent();
+        renderCategorySectionContent(currentPath[0].id);
     }
-
-    const timeUsedPercentage = Math.min(100, Math.max(0, (elapsedMs / totalWindowMs) * 100));
     
-    // Update time bar
-    domElements.timeProgressBar.style.width = `${timeUsedPercentage}%`;
-    const timeColor = getProgressFillColor(100 - timeUsedPercentage); // Green to Red
-    domElements.timeProgressBar.style.backgroundColor = timeColor;
-
-    // Update time text
-    const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
-    const remainingMinutes = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-    domElements.timeProgressRemaining.textContent = `${remainingHours}h ${remainingMinutes}m remaining`;
-    domElements.timeProgressPercentage.textContent = `${Math.round(timeUsedPercentage)}% of time used`;
-
-    // Update task progress bar
-    const dailyTracker = progressTrackers.find(t => t.type === 'daily');
-    const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
-    const progress = calculateProgressForDate(getTodayDateString(), true, dailyTarget);
-    
-    domElements.modalTaskProgressBar.style.width = `${progress.percentage}%`;
-    const progressColor = getProgressFillColor(progress.percentage);
-    domElements.modalTaskProgressBar.style.backgroundColor = progressColor;
-    
-    domElements.modalTaskProgressStats.textContent = `${progress.pointsEarned} / ${dailyTarget} Points (${progress.percentage}%)`;
+    draggedItemId = null;
 }
 
+function openProgressEditor(trackerId = null) {
+    currentlyEditingProgressTrackerId = trackerId;
+
+    if (trackerId) {
+        const tracker = progressTrackers.find(t => t.id === trackerId);
+        if (tracker) {
+            domElements.progressEditorTitle.textContent = 'Edit Progress Tracker';
+            domElements.progressNameInput.value = tracker.name;
+            domElements.progressTargetInput.value = tracker.targetPoints;
+            domElements.progressTypeSelect.value = tracker.type;
+            if (tracker.type === 'custom') {
+                domElements.progressCustomDatesContainer.classList.remove('hidden');
+                domElements.progressStartDate.value = tracker.startDate || '';
+                domElements.progressEndDate.value = tracker.endDate || '';
+            } else {
+                domElements.progressCustomDatesContainer.classList.add('hidden');
+            }
+        }
+    } else {
+        domElements.progressEditorTitle.textContent = 'New Progress Tracker';
+        domElements.progressNameInput.value = '';
+        domElements.progressTargetInput.value = '10000';
+        domElements.progressTypeSelect.value = 'weekly';
+        domElements.progressCustomDatesContainer.classList.add('hidden');
+    }
+    
+    domElements.progressEditorModal.classList.add('opening');
+    domElements.progressEditorModal.classList.remove('hidden');
+    domElements.progressNameInput.focus();
+}
+
+function closeProgressEditor() {
+    domElements.progressEditorModal.classList.add('hidden');
+    domElements.progressEditorModal.classList.remove('opening');
+    currentlyEditingProgressTrackerId = null;
+}
+
+function saveProgressTracker() {
+    const name = domElements.progressNameInput.value.trim();
+    const targetPoints = parseInt(domElements.progressTargetInput.value, 10);
+    const type = domElements.progressTypeSelect.value;
+    
+    if (!name) {
+        alert('Tracker name cannot be empty.');
+        return;
+    }
+    if (isNaN(targetPoints) || targetPoints <= 0) {
+        alert('Target points must be a positive number.');
+        return;
+    }
+
+    if (currentlyEditingProgressTrackerId) {
+        const tracker = progressTrackers.find(t => t.id === currentlyEditingProgressTrackerId);
+        if (tracker) {
+            tracker.name = name;
+            tracker.targetPoints = targetPoints;
+            tracker.type = type;
+            if (type === 'custom') {
+                tracker.startDate = domElements.progressStartDate.value;
+                tracker.endDate = domElements.progressEndDate.value;
+            }
+        }
+    } else {
+        const newTracker = {
+            id: createUniqueId('progress'),
+            name,
+            targetPoints,
+            type,
+            order: progressTrackers.length,
+            isArchived: false,
+        };
+        if (type === 'custom') {
+            newTracker.startDate = domElements.progressStartDate.value;
+            newTracker.endDate = domElements.progressEndDate.value;
+        }
+        progressTrackers.push(newTracker);
+    }
+    saveProgressTrackers();
+    renderProgressManagementList();
+    renderMainProgressBars();
+    closeProgressEditor();
+}
+
+function renderProgressManagementList() {
+    if (!domElements.progressManagementList) return;
+    
+    const activeList = domElements.activeProgressList;
+    const archivedList = domElements.archivedProgressList;
+    
+    activeList.innerHTML = '';
+    archivedList.innerHTML = '';
+
+    const activeTrackers = progressTrackers.filter(t => !t.isArchived).sort((a,b) => a.order - b.order);
+    const archivedTrackers = progressTrackers.filter(t => t.isArchived);
+
+    if(activeTrackers.length === 0) {
+        activeList.innerHTML = '<p class="empty-tasks-message">No active progress trackers.</p>';
+    } else {
+        activeTrackers.forEach(tracker => {
+            const itemEl = createProgressTrackerItemEl(tracker);
+            activeList.appendChild(itemEl);
+        });
+    }
+
+    if(archivedTrackers.length === 0) {
+        archivedList.innerHTML = '<p class="empty-tasks-message">No archived progress history.</p>';
+    } else {
+         archivedTrackers.forEach(tracker => {
+            const itemEl = createProgressHistoryItemEl(tracker);
+            archivedList.appendChild(itemEl);
+        });
+    }
+}
+
+function createProgressTrackerItemEl(tracker) {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'progress-tracker-item';
+    itemEl.innerHTML = `
+        <div class="progress-tracker-info">
+            <h4>${tracker.name}</h4>
+            <p>Target: ${tracker.targetPoints} points, Duration: ${tracker.type}</p>
+        </div>
+        <div class="progress-tracker-actions">
+             ${!tracker.isDefault ? `<button class="icon-button item-edit" title="Edit"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>` : ''}
+            <button class="icon-button item-archive" title="Archive"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM6.24 5h11.52l.83 1H5.41l.83-1zM5 19V8h14v11H5zm8-6h-2v2H9v-2H7v-2h2V9h2v2h2v2z"></path></svg></button>
+            ${!tracker.isDefault ? `<button class="icon-button item-delete" title="Delete"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>` : ''}
+        </div>
+    `;
+    const editBtn = itemEl.querySelector('.item-edit');
+    if(editBtn) editBtn.addEventListener('click', () => openProgressEditor(tracker.id));
+
+    const archiveBtn = itemEl.querySelector('.item-archive');
+    archiveBtn.addEventListener('click', () => {
+        if(confirm(`Are you sure you want to archive the tracker "${tracker.name}"?`)) {
+            tracker.isArchived = true;
+            saveProgressTrackers();
+            renderProgressManagementList();
+        }
+    });
+
+    const deleteBtn = itemEl.querySelector('.item-delete');
+    if (deleteBtn) deleteBtn.addEventListener('click', () => {
+        showDeleteConfirmation('progressTracker', tracker.id, `Are you sure you want to delete the tracker "${tracker.name}"?`);
+    });
+    return itemEl;
+}
+
+function createProgressHistoryItemEl(tracker) {
+    const itemEl = document.createElement('div');
+    itemEl.className = 'progress-history-item';
+    
+    // Placeholder logic - real implementation would calculate these values
+    const progressStatusClass = 'progress-status-incomplete';
+    const progressStatusText = 'Incomplete';
+    const pointsText = '0 / ' + tracker.targetPoints;
+
+    itemEl.innerHTML = `
+        <div class="progress-history-item-header">
+            <h4>${tracker.name}</h4>
+            <span class="progress-status ${progressStatusClass}">${progressStatusText}</span>
+        </div>
+        <div class="progress-bar-container">
+            <div class="progress-bar-fill" style="width: 0%;"></div>
+        </div>
+        <p class="points-stat">${pointsText} Points</p>
+    `;
+    itemEl.addEventListener('click', () => openProgressHistoryDetailModal(tracker.id));
+    return itemEl;
+}
+
+function openProgressHistoryDetailModal(trackerId) {
+    const tracker = progressTrackers.find(t => t.id === trackerId);
+    if (!tracker) return;
+    activeProgressDetailTracker = tracker;
+
+    domElements.progressHistoryDetailTitle.textContent = `${tracker.name} History`;
+
+    renderProgressHistoryCalendar(tracker);
+    renderProgressHistoryDailySummary(tracker, null); // Render empty initially
+    
+    domElements.progressHistoryDetailModal.classList.add('opening');
+    domElements.progressHistoryDetailModal.classList.remove('hidden');
+}
+
+function closeProgressHistoryDetailModal() {
+    domElements.progressHistoryDetailModal.classList.add('hidden');
+    domElements.progressHistoryDetailModal.classList.remove('opening');
+    activeProgressDetailTracker = null;
+}
+
+function renderProgressHistoryCalendar(tracker) {
+    // This is a complex feature. For now, it will be a simplified list of dates.
+    const calendarView = domElements.progressHistoryCalendarView;
+    calendarView.innerHTML = '<p>Calendar view is under development. A list of completed days will appear here.</p>';
+}
+
+function renderProgressHistoryDailySummary(tracker, dateString) {
+    const summaryView = domElements.progressHistoryDailySummary;
+    if (!dateString) {
+        summaryView.innerHTML = '<div class="daily-summary-card"><p>Select a day from the calendar to see details.</p></div>';
+        return;
+    }
+    
+    const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
+    const historyDataString = localStorage.getItem(historyKey);
+    if (!historyDataString) {
+        summaryView.innerHTML = '<div class="daily-summary-card"><p>No data found for this day.</p></div>';
+        return;
+    }
+    // ... rendering logic for summary card
+}
 
 function openTimeProgressModal() {
-    domElements.timeProgressModal.classList.remove('hidden');
     domElements.timeProgressModal.classList.add('opening');
-    updateTimeProgressView(); // Initial update
-    if (timeProgressInterval) clearInterval(timeProgressInterval);
-    timeProgressInterval = setInterval(updateTimeProgressView, 1000); // Update every second
+    domElements.timeProgressModal.classList.remove('hidden');
+    updateTimeProgress();
+    if (!timeProgressInterval) {
+        timeProgressInterval = setInterval(updateTimeProgress, 60000); // Update every minute
+    }
 }
 
 function closeTimeProgressModal() {
@@ -2326,740 +3096,51 @@ function closeTimeProgressModal() {
     }
 }
 
-// --- CONTEXT MENU FUNCTIONS ---
+function updateTimeProgress() {
+    if (domElements.timeProgressModal.classList.contains('hidden')) return;
 
-function showCategoryContextMenu(categoryId, tabButton) {
-    if (!domElements.categoryTabContextMenu) return;
-    
-    hideCategoryContextMenu(); // Hide any existing one first
-    currentContextMenuTargetTab = tabButton;
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 5, 30, 0);  // 5:30 AM
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21, 30, 0); // 9:30 PM
 
-    const rect = tabButton.getBoundingClientRect();
-    const menu = domElements.categoryTabContextMenu;
+    const totalDuration = endOfDay.getTime() - startOfDay.getTime();
+    const elapsedTime = now.getTime() - startOfDay.getTime();
+
+    let percentage = (elapsedTime / totalDuration) * 100;
+    percentage = Math.max(0, Math.min(100, percentage));
+
+    const timeBar = domElements.timeProgressBar;
+    timeBar.style.width = `${percentage}%`;
+
+    const remainingTimeMs = Math.max(0, endOfDay.getTime() - now.getTime());
+    const remainingHours = Math.floor(remainingTimeMs / (1000 * 60 * 60));
+    const remainingMinutes = Math.floor((remainingTimeMs % (1000 * 60 * 60)) / (1000 * 60));
     
-    menu.style.top = `${rect.bottom + 5}px`;
-    menu.style.left = `${rect.left}px`;
-    
-    // Reposition if it goes off-screen
-    const menuRect = menu.getBoundingClientRect();
-    if (menuRect.right > window.innerWidth) {
-        menu.style.left = `${rect.right - menuRect.width}px`;
+    domElements.timeProgressPercentage.textContent = `${Math.round(percentage)}% of time used`;
+    domElements.timeProgressRemaining.textContent = `${remainingHours}h ${remainingMinutes}m remaining`;
+
+    // Time bar color
+    if (currentTheme === 'flip-clock') {
+        timeBar.style.background = `var(--text-primary)`;
+    } else { // original and power-safe
+        const hue = (1- (percentage / 100)) * 120; // 0% = red (0), 100% = green (120)
+        timeBar.style.background = `hsl(${hue}, 90%, 55%)`;
     }
 
-    const category = currentCategories.find(c => c.id === categoryId);
-    if (category) {
-        domElements.ctxDeleteCategory.disabled = category.deletable === false;
-    }
+    // Task progress bar
+    const dailyTracker = progressTrackers.find(t => t.type === 'daily');
+    const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
+    const progress = calculateProgressForDate(getTodayDateString(), true, dailyTarget);
     
-    menu.classList.remove('hidden');
-    
-    // Attach event listeners here to ensure they have the correct context
-    domElements.ctxRenameCategory.onclick = () => {
-        openNameEntryModal('rename_category', 'category', category);
-        hideCategoryContextMenu();
-    };
-    
-    domElements.ctxDeleteCategory.onclick = () => {
-        showDeleteConfirmation('category', categoryId, `Are you sure you want to delete the category "${category.name}"? All its contents will be lost forever.`);
-        hideCategoryContextMenu();
-    };
-}
-
-function hideCategoryContextMenu() {
-    if (domElements.categoryTabContextMenu) {
-        domElements.categoryTabContextMenu.classList.add('hidden');
-    }
-    if (currentContextMenuTargetTab) {
-        const icon = currentContextMenuTargetTab.querySelector('.tab-options-icon');
-        if (icon) icon.classList.remove('visible'); // Hide the pulsing dots
-        currentContextMenuTargetTab = null;
-    }
-}
-
-function showItemContextMenu(targetElement, item) {
-    hideItemContextMenu(); // Hide any existing one
-
-    const popover = document.createElement('div');
-    popover.className = 'context-menu item-options-popover'; // Re-use context-menu base styles
-    popover.setAttribute('role', 'menu');
-    popover.innerHTML = `
-        <button role="menuitem" data-action="rename">Rename</button>
-        <button role="menuitem" data-action="delete">Delete</button>
-    `;
-
-    document.body.appendChild(popover);
-    itemContextMenu.element = popover;
-    itemContextMenu.target = targetElement;
-    
-    const rect = targetElement.getBoundingClientRect();
-    
-    // Position below the target, aligned to the right edge
-    popover.style.top = `${rect.bottom + 5}px`;
-    popover.style.left = 'auto'; // unset left
-    popover.style.right = `${window.innerWidth - rect.right}px`;
-    
-    // Check if it overflows on the left
-    const popoverRect = popover.getBoundingClientRect();
-    if (popoverRect.left < 0) {
-        popover.style.left = `${rect.left}px`;
-        popover.style.right = 'auto';
-    }
-    
-    popover.querySelector('[data-action="rename"]').onclick = (e) => {
-        e.stopPropagation();
-        openNameEntryModal('rename', item.type, item);
-        hideItemContextMenu();
-    };
-    
-    popover.querySelector('[data-action="delete"]').onclick = (e) => {
-        e.stopPropagation();
-        showDeleteConfirmation(item.type, item.id, `Are you sure you want to delete this ${item.type}? This action cannot be undone.`);
-        hideItemContextMenu();
-    };
-}
-
-
-function hideItemContextMenu() {
-    if (itemContextMenu.element) {
-        itemContextMenu.element.remove();
-    }
-    itemContextMenu = { element: null, target: null };
-}
-
-// Drag and Drop Logic
-function handleDragStart(e, item) {
-    draggedItemId = item.id;
-    e.dataTransfer.effectAllowed = 'move';
-    setTimeout(() => {
-        e.target.style.opacity = '0.5';
-    }, 0);
-}
-
-function handleDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (e.currentTarget.classList.contains('type-folder')) {
-        e.currentTarget.classList.add('drag-over');
-    }
-}
-
-function handleDragLeave(e) {
-    e.currentTarget.classList.remove('drag-over');
-}
-
-function handleDrop(e, targetItem) {
-    e.preventDefault();
-    e.stopPropagation();
-    e.currentTarget.classList.remove('drag-over');
-    e.currentTarget.style.opacity = '1';
-
-    if (!draggedItemId || draggedItemId === targetItem.id) return;
-
-    const draggedItemInfo = findItemAndParent(draggedItemId);
-    const targetItemInfo = findItemAndParent(targetItem.id);
-
-    if (!draggedItemInfo || !targetItemInfo || targetItem.type !== 'folder') return;
-    
-    // Remove from old parent
-    const draggedItemIndex = draggedItemInfo.parentList.findIndex(i => i.id === draggedItemId);
-    if (draggedItemIndex > -1) {
-        const [movedItem] = draggedItemInfo.parentList.splice(draggedItemIndex, 1);
-        
-        // Add to new parent (target folder)
-        if (!targetItem.content) {
-            targetItem.content = [];
-        }
-        movedItem.order = targetItem.content.length; // Add to end
-        targetItem.content.push(movedItem);
-        
-        // Save and re-render
-        saveAppContent();
-        renderCategorySectionContent(currentPath[0].id);
-    }
-    
-    draggedItemId = null;
-}
-
-function handleDocumentDragEnd(e) {
-    // This is a safety net to reset the opacity if drag ends outside a valid drop zone
-    const draggedEl = document.querySelector(`.item[data-item-id="${draggedItemId}"]`);
-    if(draggedEl) {
-        draggedEl.style.opacity = '1';
-    }
-    draggedItemId = null;
-}
-
-// Global click listener to close popovers/menus
-function handleGlobalClick(e) {
-    // Close add action menu
-    const addActionContainer = document.querySelector('.add-action-container');
-    if (isAddActionMenuOpen && addActionContainer && !addActionContainer.contains(e.target)) {
-        isAddActionMenuOpen = false;
-        addActionContainer.classList.remove('open');
-    }
-    // Close view mode menu
-    const viewModeContainer = document.querySelector('.view-mode-container');
-    if (viewModeContainer && viewModeContainer.classList.contains('open') && !viewModeContainer.contains(e.target)) {
-        viewModeContainer.classList.remove('open');
-    }
-
-    // Close context menus
-    if (currentContextMenuTargetTab && !domElements.categoryTabContextMenu.contains(e.target)) {
-        hideCategoryContextMenu();
-    }
-    if (itemContextMenu.element && !itemContextMenu.element.contains(e.target)) {
-        hideItemContextMenu();
-    }
-}
-
-// --- PROGRESS MANAGEMENT FUNCTIONS ---
-
-function renderMainProgressBars() {
-    if (!domElements.mobileProgressLocation) return;
-    domElements.mobileProgressLocation.innerHTML = '';
-    
-    const activeTrackers = progressTrackers.filter(t => !t.isArchived && ['daily', 'weekly'].includes(t.type));
-    
-    activeTrackers.forEach(tracker => {
-        const progressData = calculateProgressForTracker(tracker);
-        
-        const container = document.createElement('div');
-        container.className = 'progress-container';
-        container.innerHTML = `
-            <h3>${tracker.name}</h3>
-            <div class="progress-bar-container">
-                <div class="progress-bar-fill" role="progressbar" 
-                     aria-valuemin="0" aria-valuemax="100" 
-                     aria-valuenow="${progressData.percentage}" 
-                     style="width: ${progressData.percentage}%;">
-                </div>
-            </div>
-            <p class="points-stat progress-value">${progressData.pointsEarned} / ${tracker.targetPoints} Points (${progressData.percentage}%)</p>
-        `;
-        
-        const fillEl = container.querySelector('.progress-bar-fill');
-        if (currentTheme === 'original') {
-            fillEl.style.backgroundImage = getProgressGradient(progressData.percentage);
-        } else {
-            fillEl.style.backgroundColor = getProgressFillColor(progressData.percentage);
-        }
-
-        domElements.mobileProgressLocation.appendChild(container);
-    });
-}
-
-function calculateProgressForTracker(tracker) {
-    let startDate, endDate;
-    const today = new Date();
-    
-    switch (tracker.type) {
-        case 'daily':
-            startDate = getNormalizedDate(today);
-            endDate = getNormalizedDate(today);
-            break;
-        case 'weekly':
-            const dayOfWeek = today.getDay(); // Sunday - 0, Saturday - 6
-            const newStartDate = new Date(today);
-            newStartDate.setDate(today.getDate() - dayOfWeek);
-            startDate = getNormalizedDate(newStartDate);
-            const newEndDate = new Date(startDate);
-            newEndDate.setDate(startDate.getDate() + 6);
-            endDate = getNormalizedDate(newEndDate);
-            break;
-        case 'monthly':
-             startDate = getNormalizedDate(new Date(today.getFullYear(), today.getMonth(), 1));
-             endDate = getNormalizedDate(new Date(today.getFullYear(), today.getMonth() + 1, 0));
-            break;
-        case 'custom':
-            startDate = getNormalizedDate(new Date(tracker.startDate));
-            endDate = getNormalizedDate(new Date(tracker.endDate));
-            break;
-        default:
-            return { pointsEarned: 0, percentage: 0 };
-    }
-
-    let totalPoints = 0;
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        if (d > getNormalizedDate(new Date())) continue; // Don't count future days
-        
-        const dateString = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}-${d.getDate().toString().padStart(2, '0')}`;
-        const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
-        const historyData = localStorage.getItem(historyKey);
-        if (historyData) {
-            try {
-                const entry = JSON.parse(historyData);
-                totalPoints += (entry.pointsEarned || 0);
-            } catch(e) { /* ignore parse error */ }
-        }
-    }
-    
-    const percentage = tracker.targetPoints > 0 ? Math.round((totalPoints / tracker.targetPoints) * 100) : 0;
-    return {
-        pointsEarned: totalPoints,
-        percentage: Math.min(100, percentage), // Cap at 100%
-        startDate,
-        endDate
-    };
-}
-
-
-function renderProgressManagementList() {
-    if (!domElements.activeProgressList || !domElements.archivedProgressList) return;
-
-    domElements.activeProgressList.innerHTML = '';
-    domElements.archivedProgressList.innerHTML = '';
-
-    const activeTrackers = progressTrackers.filter(t => !t.isArchived).sort((a,b) => (a.order || 0) - (b.order || 0));
-    const archivedTrackers = progressTrackers.filter(t => t.isArchived).sort((a, b) => new Date(b.endDate) - new Date(a.endDate));
-
-    activeTrackers.forEach(tracker => {
-        const itemEl = createProgressTrackerItem(tracker);
-        domElements.activeProgressList.appendChild(itemEl);
-    });
-    
-    archivedTrackers.forEach(tracker => {
-        const historyItemEl = createProgressHistoryItem(tracker);
-        domElements.archivedProgressList.appendChild(historyItemEl);
-    });
-
-    domElements.archivedProgressSection.classList.toggle('hidden', archivedTrackers.length === 0);
-}
-
-function createProgressTrackerItem(tracker) {
-    const itemEl = document.createElement('div');
-    itemEl.className = 'progress-tracker-item';
-    itemEl.innerHTML = `
-        <div class="progress-tracker-info">
-            <h4>${tracker.name}</h4>
-            <p>${tracker.targetPoints} point target</p>
-        </div>
-        <div class="progress-tracker-actions">
-            ${!tracker.isDefault ? `
-            <button class="icon-button" data-action="edit" title="Edit Tracker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>
-            <button class="icon-button" data-action="delete" title="Delete Tracker"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>
-            ` : ''}
-        </div>
-    `;
-
-    itemEl.querySelector('[data-action="edit"]')?.addEventListener('click', () => openProgressEditorModal(tracker.id));
-    itemEl.querySelector('[data-action="delete"]')?.addEventListener('click', () => {
-        showDeleteConfirmation('progressTracker', tracker.id, `Are you sure you want to delete the "${tracker.name}" tracker?`);
-    });
-
-    return itemEl;
-}
-
-function createProgressHistoryItem(tracker) {
-    const progressData = calculateProgressForTracker(tracker);
-    const isCompleted = progressData.pointsEarned >= tracker.targetPoints;
-
-    const itemEl = document.createElement('div');
-    itemEl.className = 'progress-history-item';
-    itemEl.innerHTML = `
-        <div class="progress-history-item-header">
-            <h4>${tracker.name}</h4>
-            <span class="progress-status ${isCompleted ? 'progress-status-completed' : 'progress-status-incomplete'}">
-                ${isCompleted ? 'Completed' : 'Incomplete'}
-            </span>
-        </div>
-        <div class="progress-bar-container">
-            <div class="progress-bar-fill" style="width: ${progressData.percentage}%;"></div>
-        </div>
-        <p class="points-stat">${progressData.pointsEarned} / ${tracker.targetPoints} Points (${progressData.percentage}%)</p>
-    `;
-    itemEl.querySelector('.progress-bar-fill').style.backgroundColor = getProgressFillColor(progressData.percentage);
-    itemEl.addEventListener('click', () => openProgressHistoryDetailModal(tracker.id));
-    return itemEl;
-}
-
-function openProgressEditorModal(trackerId = null) {
-    currentlyEditingProgressTrackerId = trackerId;
-    
-    if (trackerId) {
-        const tracker = progressTrackers.find(t => t.id === trackerId);
-        if (!tracker) return;
-        domElements.progressEditorTitle.textContent = 'Edit Progress Tracker';
-        domElements.progressNameInput.value = tracker.name;
-        domElements.progressTargetInput.value = tracker.targetPoints;
-        domElements.progressTypeSelect.value = tracker.type;
-        if (tracker.type === 'custom') {
-            domElements.progressStartDate.value = tracker.startDate;
-            domElements.progressEndDate.value = tracker.endDate;
-        }
+    domElements.modalTaskProgressBar.style.width = `${progress.percentage}%`;
+    if (currentTheme === 'original') {
+        domElements.modalTaskProgressBar.style.backgroundImage = getProgressGradient(progress.percentage);
     } else {
-        domElements.progressEditorTitle.textContent = 'New Progress Tracker';
-        domElements.progressNameInput.value = '';
-        domElements.progressTargetInput.value = '';
-        domElements.progressTypeSelect.value = 'custom';
-        domElements.progressStartDate.value = '';
-        domElements.progressEndDate.value = '';
+        domElements.modalTaskProgressBar.style.backgroundColor = getProgressFillColor(progress.percentage);
     }
     
-    domElements.progressCustomDatesContainer.classList.toggle('hidden', domElements.progressTypeSelect.value !== 'custom');
-    domElements.progressEditorModal.classList.remove('hidden');
-    domElements.progressEditorModal.classList.add('opening');
+    domElements.modalTaskProgressStats.textContent = `${progress.pointsEarned} / ${dailyTarget} Points (${progress.percentage}%)`;
 }
 
-function closeProgressEditorModal() {
-    domElements.progressEditorModal.classList.add('hidden');
-    domElements.progressEditorModal.classList.remove('opening');
-    currentlyEditingProgressTrackerId = null;
-}
-
-function saveProgressTracker() {
-    const name = domElements.progressNameInput.value.trim();
-    const targetPoints = parseInt(domElements.progressTargetInput.value, 10);
-    const type = domElements.progressTypeSelect.value;
-
-    if (!name || isNaN(targetPoints) || targetPoints <= 0) {
-        alert('Please provide a valid name and positive target points.');
-        return;
-    }
-    
-    const trackerData = { name, targetPoints, type, isDefault: false };
-    
-    if (type === 'custom') {
-        const startDate = domElements.progressStartDate.value;
-        const endDate = domElements.progressEndDate.value;
-        if (!startDate || !endDate || new Date(startDate) > new Date(endDate)) {
-            alert('Please provide a valid start and end date for custom trackers.');
-            return;
-        }
-        trackerData.startDate = startDate;
-        trackerData.endDate = endDate;
-    }
-
-    if (currentlyEditingProgressTrackerId) {
-        const index = progressTrackers.findIndex(t => t.id === currentlyEditingProgressTrackerId);
-        if (index > -1) {
-            progressTrackers[index] = { ...progressTrackers[index], ...trackerData };
-        }
-    } else {
-        trackerData.id = createUniqueId('progress');
-        trackerData.order = progressTrackers.length;
-        progressTrackers.push(trackerData);
-    }
-    
-    saveProgressTrackers();
-    renderProgressManagementList();
-    renderMainProgressBars();
-    closeProgressEditorModal();
-}
-
-function openProgressHistoryDetailModal(trackerId) {
-    activeProgressDetailTracker = progressTrackers.find(t => t.id === trackerId);
-    if (!activeProgressDetailTracker) return;
-
-    domElements.progressHistoryDetailTitle.textContent = `${activeProgressDetailTracker.name} Details`;
-    
-    const calendarView = domElements.progressHistoryCalendarView;
-    const summaryView = domElements.progressHistoryDailySummary;
-    
-    const progressData = calculateProgressForTracker(activeProgressDetailTracker);
-
-    calendarView.innerHTML = `<h4>Overall Progress</h4>`;
-    summaryView.innerHTML = `<h4>Summary</h4>
-        <p>Start: ${progressData.startDate.toLocaleDateString()}</p>
-        <p>End: ${progressData.endDate.toLocaleDateString()}</p>
-        <br>
-        <div class="daily-summary-card">
-            <div class="progress-bar-container"><div class="progress-bar-fill" style="width: ${progressData.percentage}%;"></div></div>
-            <p class="points-stat">${progressData.pointsEarned} / ${activeProgressDetailTracker.targetPoints} Points (${progressData.percentage}%)</p>
-        </div>
-    `;
-    summaryView.querySelector('.progress-bar-fill').style.backgroundColor = getProgressFillColor(progressData.percentage);
-
-
-    domElements.progressHistoryDetailModal.classList.remove('hidden');
-    domElements.progressHistoryDetailModal.classList.add('opening');
-}
-
-function closeProgressHistoryDetailModal() {
-    domElements.progressHistoryDetailModal.classList.add('hidden');
-    domElements.progressHistoryDetailModal.classList.remove('opening');
-    activeProgressDetailTracker = null;
-}
-
-// --- SCHEDULED TASKS FUNCTIONS ---
-
-function renderTodaysScheduledTasks() {
-    if (!domElements.scheduledTasksTodayContainer || !domElements.scheduledTasksTodayList) return;
-    const today = getTodayDateString();
-    const tasksForToday = scheduledTasks.filter(t => t.date === today);
-
-    domElements.scheduledTasksTodayContainer.classList.toggle('hidden', tasksForToday.length === 0);
-    domElements.scheduledTasksTodayList.innerHTML = '';
-    
-    tasksForToday.forEach(task => {
-        const itemEl = createScheduledTaskItem(task, true);
-        domElements.scheduledTasksTodayList.appendChild(itemEl);
-    });
-}
-
-function renderScheduledTasksManagementList() {
-    if (!domElements.scheduledTasksListContainer) return;
-    domElements.scheduledTasksListContainer.innerHTML = '';
-    
-    const tasksByDate = scheduledTasks.reduce((acc, task) => {
-        const date = task.date;
-        if (!acc[date]) acc[date] = [];
-        acc[date].push(task);
-        return acc;
-    }, {});
-    
-    const sortedDates = Object.keys(tasksByDate).sort((a,b) => new Date(a) - new Date(b));
-    
-    sortedDates.forEach(date => {
-        const dateGroupEl = document.createElement('div');
-        dateGroupEl.className = 'scheduled-task-date-group';
-        
-        const formattedDate = new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
-            weekday: 'long', month: 'long', day: 'numeric'
-        });
-        dateGroupEl.innerHTML = `<h2 class="scheduled-task-date-header">${formattedDate}</h2>`;
-        
-        tasksByDate[date].forEach(task => {
-            const itemEl = createScheduledTaskItem(task, false);
-            dateGroupEl.appendChild(itemEl);
-        });
-        domElements.scheduledTasksListContainer.appendChild(dateGroupEl);
-    });
-}
-
-function createScheduledTaskItem(task, isForTodayView) {
-    const li = document.createElement(isForTodayView ? 'li' : 'div');
-    li.className = 'scheduled-task-item';
-    const isCompleted = task.completedOn === task.date;
-    li.classList.toggle('completed', isCompleted);
-
-    li.innerHTML = `
-        <input type="checkbox" class="checklist-item-checkbox" ${isCompleted ? 'checked' : ''}>
-        <p>${task.text}</p>
-        <div class="scheduled-task-item-actions">
-            ${!isForTodayView ? `
-            <button class="icon-button item-rename" title="Edit Task"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"></path></svg></button>
-            <button class="icon-button item-delete" title="Delete Task"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"></path></svg></button>
-            ` : ''}
-        </div>
-    `;
-
-    li.querySelector('.checklist-item-checkbox').addEventListener('change', (e) => {
-        task.completedOn = e.target.checked ? task.date : null;
-        saveScheduledTasks();
-        li.classList.toggle('completed', e.target.checked);
-        updateTodaysHistoryEntry();
-        updateAllProgress();
-    });
-
-    li.querySelector('.item-rename')?.addEventListener('click', () => openScheduledTaskEditorModal(task.id));
-    li.querySelector('.item-delete')?.addEventListener('click', () => {
-        showDeleteConfirmation('scheduledTask', task.id, `Are you sure you want to delete the task "${task.text}"?`);
-    });
-
-    return li;
-}
-
-function openScheduledTaskEditorModal(taskId = null) {
-    currentlyEditingScheduledTaskId = taskId;
-    if (taskId) {
-        const task = scheduledTasks.find(t => t.id === taskId);
-        if (!task) return;
-        domElements.scheduledTaskEditorTitle.textContent = "Edit Scheduled Task";
-        domElements.scheduledTaskEditorInput.value = task.text;
-        domElements.scheduledTaskEditorDateInput.value = task.date;
-    } else {
-        domElements.scheduledTaskEditorTitle.textContent = "New Scheduled Task";
-        domElements.scheduledTaskEditorInput.value = '';
-        domElements.scheduledTaskEditorDateInput.value = getTodayDateString();
-    }
-    domElements.scheduledTaskEditorModal.classList.remove('hidden');
-    domElements.scheduledTaskEditorModal.classList.add('opening');
-}
-
-function closeScheduledTaskEditorModal() {
-    domElements.scheduledTaskEditorModal.classList.add('hidden');
-    domElements.scheduledTaskEditorModal.classList.remove('opening');
-    currentlyEditingScheduledTaskId = null;
-}
-
-function saveScheduledTask() {
-    const text = domElements.scheduledTaskEditorInput.value.trim();
-    const date = domElements.scheduledTaskEditorDateInput.value;
-    if (!text || !date) {
-        alert('Please enter task text and select a date.');
-        return;
-    }
-
-    if (currentlyEditingScheduledTaskId) {
-        const task = scheduledTasks.find(t => t.id === currentlyEditingScheduledTaskId);
-        if (task) {
-            task.text = text;
-            task.date = date;
-        }
-    } else {
-        const newTask = {
-            id: createUniqueId('sched'),
-            text,
-            date,
-            completedOn: null
-        };
-        scheduledTasks.push(newTask);
-    }
-    
-    saveScheduledTasks();
-    renderScheduledTasksManagementList();
-    renderCalendar();
-    renderTodaysScheduledTasks();
-    closeScheduledTaskEditorModal();
-}
-
-function initApp() {
-    // Query all DOM elements
-    for (const key in domElements) {
-        const id = key.replace(/([A-Z])/g, '-$1').toLowerCase();
-        domElements[key] = document.getElementById(id);
-    }
-
-    // Load theme first
-    const savedTheme = localStorage.getItem(STORAGE_KEY_THEME);
-    if (savedTheme && THEMES.some(t => t.id === savedTheme)) {
-        applyTheme(savedTheme);
-    }
-
-    loadAppData();
-    renderAllUI();
-
-    // Attach event listeners
-    // Hamburger and side panel
-    domElements.hamburgerButton.addEventListener('click', toggleSidePanel);
-    domElements.sidePanelOverlay.addEventListener('click', toggleSidePanel);
-    domElements.menuMainView.addEventListener('click', () => switchView('main'));
-    domElements.menuActivityDashboard.addEventListener('click', () => switchView('activity-dashboard'));
-    domElements.menuProgressManagement.addEventListener('click', () => switchView('progress-management'));
-    domElements.menuScheduledTasks.addEventListener('click', () => switchView('scheduled-tasks'));
-    domElements.appearanceMenuItemContainer.addEventListener('click', toggleThemeDropdown);
-
-
-    // Tabs and categories
-    domElements.dashboardTabButton.addEventListener('click', () => switchTab('dashboard'));
-    domElements.addCategoryButton.addEventListener('click', openChooseCategoryTypeModal);
-    
-    // Main dashboard items
-    domElements.saveNoteButton.addEventListener('click', saveDailyNote);
-    domElements.calendarPrevMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
-    domElements.calendarNextMonthButton.addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
-    domElements.calendarMonthYearButton.addEventListener('click', toggleMonthYearPicker);
-
-    // Modals
-    // Delete Confirmation
-    domElements.confirmDeleteButton.addEventListener('click', confirmDeletion);
-    domElements.cancelDeleteButton.addEventListener('click', hideDeleteConfirmation);
-    domElements.deleteConfirmationCloseButton.addEventListener('click', hideDeleteConfirmation);
-    
-    // History Modal
-    domElements.historyModalCloseButton.addEventListener('click', closeHistoryModal);
-    domElements.expandTasksButton.addEventListener('click', () => openFullscreenContentModal('tasks', currentModalDate));
-    domElements.expandReflectionButton.addEventListener('click', () => openFullscreenContentModal('reflection', currentModalDate));
-    domElements.saveHistoricalNoteButton.addEventListener('click', saveHistoricalNote);
-    domElements.clearHistoricalNoteButton.addEventListener('click', clearHistoricalNote);
-
-    // Fullscreen Modal
-    domElements.fullscreenModalCloseButton.addEventListener('click', closeFullscreenContentModal);
-
-    // Month/Year Picker
-    domElements.monthYearPickerCloseButton.addEventListener('click', closeMonthYearPicker);
-    
-    // Category Type Choice
-    domElements.chooseCategoryTypeCloseButton.addEventListener('click', closeChooseCategoryTypeModal);
-    domElements.selectStandardCategoryButton.addEventListener('click', () => handleSelectCategoryType('standard'));
-    domElements.selectSpecialCategoryButton.addEventListener('click', () => handleSelectCategoryType('special'));
-
-    // Name Entry
-    domElements.nameEntryCloseButton.addEventListener('click', closeNameEntryModal);
-    domElements.cancelNameEntryButton.addEventListener('click', closeNameEntryModal);
-    domElements.confirmNameEntryButton.addEventListener('click', handleConfirmNameEntry);
-    domElements.nameEntryInput.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter') handleConfirmNameEntry();
-        if(e.key === 'Escape') closeNameEntryModal();
-    });
-
-    // Note Editor
-    domElements.noteEditorCloseButton.addEventListener('click', closeNoteEditorModal);
-    domElements.noteAddImageButton.addEventListener('click', handleAddImageToNote);
-    domElements.imageUploadInput.addEventListener('change', (e) => {
-        if(e.target.files && e.target.files[0]) processAndInsertImage(e.target.files[0]);
-    });
-
-    // Task List Editor
-    domElements.taskListCloseButton.addEventListener('click', closeTaskListModal);
-    domElements.taskListEditButton.addEventListener('click', toggleTaskListEditMode);
-    domElements.taskListResetButton.addEventListener('click', handleResetTasks);
-    domElements.addChecklistItemForm.addEventListener('submit', handleAddChecklistItem);
-
-    // Progress Management
-    domElements.addNewProgressButton.addEventListener('click', () => openProgressEditorModal());
-    domElements.progressEditorCloseButton.addEventListener('click', closeProgressEditorModal);
-    domElements.saveProgressButton.addEventListener('click', saveProgressTracker);
-    domElements.progressTypeSelect.addEventListener('change', () => {
-        domElements.progressCustomDatesContainer.classList.toggle('hidden', domElements.progressTypeSelect.value !== 'custom');
-    });
-    domElements.progressHistoryDetailCloseButton.addEventListener('click', closeProgressHistoryDetailModal);
-
-    // Scheduled Tasks
-    domElements.addNewScheduledTaskButton.addEventListener('click', () => openScheduledTaskEditorModal());
-    domElements.scheduledTaskEditorCloseButton.addEventListener('click', closeScheduledTaskEditorModal);
-    domElements.saveScheduledTaskButton.addEventListener('click', saveScheduledTask);
-
-    // Time vs Progress
-    domElements.timeProgressButton.addEventListener('click', openTimeProgressModal);
-    domElements.timeProgressCloseButton.addEventListener('click', closeTimeProgressModal);
-    
-    // Global Listeners
-    document.addEventListener('dragend', handleDocumentDragEnd);
-    document.addEventListener('click', handleGlobalClick);
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            if (domElements.noteEditorModal && !domElements.noteEditorModal.classList.contains('hidden')) closeNoteEditorModal();
-            else if (domElements.taskListModal && !domElements.taskListModal.classList.contains('hidden')) closeTaskListModal();
-            else if (domElements.fullscreenContentModal && !domElements.fullscreenContentModal.classList.contains('hidden')) closeFullscreenContentModal();
-            else if (domElements.historyModal && !domElements.historyModal.classList.contains('hidden')) closeHistoryModal();
-            else if (domElements.deleteConfirmationModal && !domElements.deleteConfirmationModal.classList.contains('hidden')) hideDeleteConfirmation();
-            else if (domElements.nameEntryModal && !domElements.nameEntryModal.classList.contains('hidden')) closeNameEntryModal();
-            else if (domElements.chooseCategoryTypeModal && !domElements.chooseCategoryTypeModal.classList.contains('hidden')) closeChooseCategoryTypeModal();
-            else if (domElements.monthYearPickerModal && !domElements.monthYearPickerModal.classList.contains('hidden')) closeMonthYearPicker();
-            else if (domElements.progressEditorModal && !domElements.progressEditorModal.classList.contains('hidden')) closeProgressEditorModal();
-            else if (domElements.progressHistoryDetailModal && !domElements.progressHistoryDetailModal.classList.contains('hidden')) closeProgressHistoryDetailModal();
-            else if (domElements.scheduledTaskEditorModal && !domElements.scheduledTaskEditorModal.classList.contains('hidden')) closeScheduledTaskEditorModal();
-            else if (domElements.timeProgressModal && !domElements.timeProgressModal.classList.contains('hidden')) closeTimeProgressModal();
-            else if (itemContextMenu.element) hideItemContextMenu();
-            else if (currentContextMenuTargetTab) hideCategoryContextMenu();
-            else if (domElements.sidePanelMenu.classList.contains('open')) toggleSidePanel();
-        }
-    });
-}
-
-function renderAllUI() {
-    renderTabs();
-    renderAllCategorySections();
-    updateAllProgress();
-    switchTab('dashboard'); // Start on the main dashboard tab
-    switchView('main'); // Start in the main view
-}
-
-function renderAllCategorySections() {
-    if (!domElements.tabContent || !domElements.categorySectionTemplate) return;
-
-    domElements.tabContent.querySelectorAll('.category-section').forEach(sec => sec.remove());
-    
-    currentCategories.forEach(category => {
-        const categorySectionClone = domElements.categorySectionTemplate.content.cloneNode(true);
-        const sectionEl = categorySectionClone.querySelector('section');
-        sectionEl.id = `category-section-${category.id}`;
-        sectionEl.setAttribute('aria-labelledby', `tab-button-${category.id}`);
-        sectionEl.querySelector('.category-title-text').textContent = category.name;
-        domElements.tabContent.appendChild(categorySectionClone);
-    });
-}
-
-// Kick it all off
-document.addEventListener('DOMContentLoaded', initApp);
+// --- Init ---
+document.addEventListener('DOMContentLoaded', initialize);
