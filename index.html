@@ -31,6 +31,7 @@
                 <li><button id="menu-main-view" class="side-panel-item">Main</button></li>
                 <li><button id="menu-activity-dashboard" class="side-panel-item">Activity Dashboard</button></li>
                 <li><button id="menu-progress-management" class="side-panel-item">Progress Management</button></li>
+                <li><button id="menu-scheduled-tasks" class="side-panel-item">Scheduled Tasks</button></li>
                 <li id="appearance-menu-item-container">
                     <button id="menu-appearance" class="side-panel-item">
                         <span>Appearance</span>
@@ -46,6 +47,20 @@
     <div id="side-panel-overlay" class="side-panel-overlay hidden"></div>
 
     <div id="app-container">
+        <div id="scheduled-tasks-view" class="hidden">
+            <header class="progress-management-header">
+                <h1>Scheduled Tasks</h1>
+            </header>
+            <main id="scheduled-tasks-list-container">
+                <!-- Scheduled tasks will be populated here by JS -->
+            </main>
+            <footer id="scheduled-tasks-footer">
+                <button id="add-new-scheduled-task-button" class="fab-button" aria-label="Add new scheduled task">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"></path></svg>
+                </button>
+            </footer>
+        </div>
+        
         <div id="progress-management-view" class="hidden">
             <header class="progress-management-header">
                 <h1>Progress Management</h1>
@@ -97,6 +112,14 @@
                                     <!-- Calendar days will be populated by JS -->
                                 </div>
                             </div>
+                            
+                            <!-- New: Today's Scheduled Tasks -->
+                            <div id="scheduled-tasks-today-container" class="hidden">
+                                <h3>Today's Scheduled Tasks</h3>
+                                <ul id="scheduled-tasks-today-list">
+                                    <!-- Today's scheduled tasks will be populated by JS -->
+                                </ul>
+                            </div>
 
                             <!-- 2. Today's Reflection Section -->
                             <div id="daily-note-container">
@@ -130,6 +153,18 @@
     </div> <!-- End App Container -->
 
     <!-- Modals and Templates -->
+    
+    <div id="scheduled-task-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scheduled-task-editor-title">
+        <div class="modal-content">
+            <button id="scheduled-task-editor-close-button" class="close-button" aria-label="Close scheduled task editor">&times;</button>
+            <h3 id="scheduled-task-editor-title" class="modal-title-text">New Scheduled Task</h3>
+            <input type="text" id="scheduled-task-editor-input" class="modal-input" placeholder="Task description...">
+            <input type="date" id="scheduled-task-editor-date-input" class="modal-input">
+            <div class="modal-actions-centered">
+                <button id="save-scheduled-task-button" class="modal-button-primary">Save Task</button>
+            </div>
+        </div>
+    </div>
 
     <div id="progress-history-detail-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="progress-history-detail-title">
         <div class="modal-content fullscreen-modal-content-box">
