@@ -1861,10 +1861,11 @@ function renderMainProgressBars() {
         `;
         
         const fillEl = container.querySelector('.progress-bar-fill');
-        if (currentTheme === 'original' || currentTheme === 'power-safe') {
+        if (currentTheme === 'original') {
+            fillEl.style.backgroundImage = getProgressGradient(percentage);
+        } else { // power-safe and flip-clock
             fillEl.style.backgroundColor = getProgressFillColor(percentage);
-        } else { // flip-clock
-            fillEl.style.backgroundColor = getProgressFillColor(percentage);
+            fillEl.style.backgroundImage = 'none'; // Remove gradient if theme was switched
         }
         domElements.mobileProgressLocation.appendChild(container);
     });
@@ -1994,26 +1995,32 @@ function renderCalendar() {
 
         if (cellDate > today) {
              cell.classList.add('future-day');
-             cell.style.opacity = '1';
-        } 
-        
-        // Add progress fill for past days
-        if (cellDate < today) {
-            const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
-            const historyData = localStorage.getItem(historyKey);
-            if (historyData) {
-                try {
-                    const entry = JSON.parse(historyData);
-                    const percentage = entry.percentageCompleted || 0;
-                    const fillEl = cell.querySelector('.calendar-day-fill');
-                    if (fillEl) {
-                        fillEl.style.height = `${percentage}%`;
-                        fillEl.style.backgroundColor = getProgressFillColor(percentage);
-                    }
-                    if (percentage > 75) {
-                        cell.classList.add('high-fill');
-                    }
-                } catch(e) { console.error(`Error parsing history for ${dateString}:`, e); }
+        } else { // Today or in the past
+            let percentage = 0;
+            if (cellDate.getTime() < today.getTime()) {
+                // Past day logic
+                const historyKey = STORAGE_KEY_DAILY_HISTORY_PREFIX + dateString;
+                const historyData = localStorage.getItem(historyKey);
+                if (historyData) {
+                    try {
+                        const entry = JSON.parse(historyData);
+                        percentage = entry.percentageCompleted || 0;
+                    } catch(e) { console.error(`Error parsing history for ${dateString}:`, e); }
+                }
+            } else { // It's today
+                const dailyTracker = progressTrackers.find(t => t.type === 'daily');
+                const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
+                const progress = calculateProgressForDate(dateString, true, dailyTarget);
+                percentage = progress.percentage || 0;
+            }
+
+            const fillEl = cell.querySelector('.calendar-day-fill');
+            if (fillEl) {
+                fillEl.style.height = `${percentage}%`;
+                fillEl.style.backgroundColor = getProgressFillColor(percentage);
+            }
+            if (percentage > 75) {
+                cell.classList.add('high-fill');
             }
         }
         
@@ -3120,12 +3127,10 @@ function updateTimeProgress() {
     domElements.timeProgressRemaining.textContent = `${remainingHours}h ${remainingMinutes}m remaining`;
 
     // Time bar color
-    if (currentTheme === 'flip-clock') {
-        timeBar.style.background = `var(--text-primary)`;
-    } else { // original and power-safe
-        const hue = (1- (percentage / 100)) * 120; // 0% = red (0), 100% = green (120)
-        timeBar.style.background = `hsl(${hue}, 90%, 55%)`;
-    }
+    // Color goes from green (100% time left) to red (0% time left).
+    // So we use getProgressFillColor with the inverse of the percentage of time used.
+    timeBar.style.backgroundColor = getProgressFillColor(100 - percentage);
+    timeBar.style.backgroundImage = 'none'; // Ensure no gradient is applied
 
     // Task progress bar
     const dailyTracker = progressTrackers.find(t => t.type === 'daily');
