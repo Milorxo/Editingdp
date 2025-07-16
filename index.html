@@ -188,8 +188,25 @@
         <div class="modal-content">
             <button id="scheduled-task-editor-close-button" class="close-button" aria-label="Close scheduled task editor">&times;</button>
             <h3 id="scheduled-task-editor-title" class="modal-title-text">New Scheduled Task</h3>
-            <input type="text" id="scheduled-task-editor-input" class="modal-input" placeholder="Task description...">
-            <input type="date" id="scheduled-task-editor-date-input" class="modal-input">
+            <div class="scheduled-task-editor-form">
+                <label for="scheduled-task-editor-input">Task</label>
+                <input type="text" id="scheduled-task-editor-input" class="modal-input" placeholder="Task description...">
+                
+                <label for="scheduled-task-editor-date-input">Date</label>
+                <input type="date" id="scheduled-task-editor-date-input" class="modal-input">
+
+                <label for="scheduled-task-recurrence-select">Repeat</label>
+                <select id="scheduled-task-recurrence-select" class="modal-input">
+                    <option value="none" selected>None</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                </select>
+
+                <label for="scheduled-task-color-picker">Label Color</label>
+                <div id="scheduled-task-color-picker" class="color-picker-container">
+                    <!-- Color options populated by JS -->
+                </div>
+            </div>
             <div class="modal-actions-centered">
                 <button id="save-scheduled-task-button" class="modal-button-primary">Save Task</button>
             </div>
