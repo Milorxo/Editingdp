@@ -25,6 +25,10 @@
         <span class="hamburger-line"></span>
     </button>
 
+    <button id="time-progress-button" aria-label="Open Time vs. Progress View">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/><path d="M12.5 7H11v6l5.25 3.15.75-1.23-4.5-2.67z"></path></svg>
+    </button>
+
     <div id="side-panel-menu" class="side-panel-menu" role="navigation" aria-hidden="true">
         <nav>
             <ul>
@@ -154,6 +158,32 @@
 
     <!-- Modals and Templates -->
     
+    <div id="time-progress-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="time-progress-title">
+        <div class="modal-content">
+            <button id="time-progress-close-button" class="close-button" aria-label="Close time vs. progress view">&times;</button>
+            <h3 id="time-progress-title" class="modal-title-text">Time vs. Progress</h3>
+            
+            <div class="comparison-section">
+                <h4>Time Remaining Today (5:30 AM - 9:30 PM)</h4>
+                <div class="comparison-bar-container">
+                    <div id="time-progress-bar" class="comparison-bar-fill"></div>
+                </div>
+                <div class="comparison-stats">
+                    <span id="time-progress-percentage">0% of time used</span>
+                    <span id="time-progress-remaining">16h 0m remaining</span>
+                </div>
+            </div>
+
+            <div class="comparison-section">
+                <h4>Today's Task Progress</h4>
+                <div class="progress-bar-container">
+                    <div id="modal-task-progress-bar" class="progress-bar-fill"></div>
+                </div>
+                <p id="modal-task-progress-stats" class="points-stat progress-value">0 / 2700 Points (0%)</p>
+            </div>
+        </div>
+    </div>
+
     <div id="scheduled-task-editor-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="scheduled-task-editor-title">
         <div class="modal-content">
             <button id="scheduled-task-editor-close-button" class="close-button" aria-label="Close scheduled task editor">&times;</button>
