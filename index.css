@@ -755,6 +755,7 @@ main#tab-content > section.hidden {
     transition: all 0.2s ease-out;
     overflow: hidden;
     border: 1px solid transparent;
+    padding-top: 4px;
 }
 [data-theme="flip-clock"] .calendar-day-cell {
     background-color: #222222;
@@ -790,7 +791,8 @@ main#tab-content > section.hidden {
 }
 .calendar-day-number {
     font-size: 0.8em;
-    padding: 5px;
+    padding: 0;
+    margin-bottom: 4px;
     z-index: 1;
     color: var(--text-primary);
     font-weight: 500;
@@ -804,7 +806,6 @@ main#tab-content > section.hidden {
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-top: 3px;
     box-shadow: var(--glow-cyan-soft);
 }
 .calendar-day-fill {
@@ -826,6 +827,25 @@ main#tab-content > section.hidden {
 .calendar-day-cell.high-fill .calendar-day-number {
     color: var(--text-on-fill);
 }
+
+.calendar-dot-container {
+    position: absolute;
+    bottom: 4px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 3px;
+    pointer-events: none;
+}
+.calendar-task-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
 
 .scheduled-task-indicator {
     position: absolute;
@@ -864,6 +884,10 @@ main#tab-content > section.hidden {
     list-style: none;
     padding: 0;
     margin: 0;
+}
+#scheduled-tasks-today-list .checklist-item {
+    border-left: 4px solid var(--panel-border);
+    padding-left: 10px;
 }
 
 
@@ -2358,20 +2382,20 @@ main#tab-content > section.hidden {
 #progress-editor-modal .modal-content {
     max-width: 450px;
 }
-.progress-editor-form {
+.progress-editor-form, .scheduled-task-editor-form {
     display: flex;
     flex-direction: column;
     gap: 5px;
 }
-.progress-editor-form label {
+.progress-editor-form label, .scheduled-task-editor-form label {
     font-size: 0.9em;
     color: var(--text-secondary);
     margin-top: 10px;
 }
-.progress-editor-form .modal-input {
+.progress-editor-form .modal-input, .scheduled-task-editor-form .modal-input {
     margin-bottom: 5px;
 }
-.progress-editor-form select.modal-input {
+.progress-editor-form select.modal-input, .scheduled-task-editor-form select.modal-input {
     appearance: none;
     -webkit-appearance: none;
     padding-right: 30px;
@@ -2379,6 +2403,30 @@ main#tab-content > section.hidden {
     background-repeat: no-repeat;
     background-position: right 0.7rem center;
     background-size: 1em;
+}
+
+/* Color Picker */
+.color-picker-container {
+    display: flex;
+    gap: 10px;
+    margin-top: 5px;
+    margin-bottom: 15px;
+}
+.color-option {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: transform 0.2s, border-color 0.2s;
+    padding: 0;
+}
+.color-option:hover {
+    transform: scale(1.1);
+}
+.color-option.selected {
+    border-color: var(--accent-cyan);
+    transform: scale(1.1);
 }
 
 /* Progress History Detail Modal */
@@ -2513,6 +2561,7 @@ main#tab-content > section.hidden {
     width: 0%;
     border-radius: 20px;
     transition: width 0.5s ease-out, background-color 0.5s ease-out;
+    background-color: var(--accent-cyan);
 }
 .comparison-stats {
     display: flex;
@@ -2520,6 +2569,11 @@ main#tab-content > section.hidden {
     font-size: 0.9em;
     color: var(--text-secondary);
     margin-top: 8px;
+}
+[data-theme="flip-clock"] .comparison-bar-fill,
+[data-theme="power-safe"] .comparison-bar-fill {
+    background-image: none;
+    background-color: var(--text-primary);
 }
 [data-theme="flip-clock"] .comparison-section h4 {
     font-family: 'Poppins', sans-serif;
