@@ -2455,6 +2455,77 @@ main#tab-content > section.hidden {
     border-bottom: 1px solid rgba(190, 147, 253, 0.08);
 }
 
+/* Time vs Progress View */
+#time-progress-button {
+    position: fixed;
+    top: 15px;
+    right: 15px;
+    z-index: 1005;
+    width: 40px;
+    height: 40px;
+    background-color: rgba(30, 26, 48, 0.8);
+    border: 1px solid var(--modal-border);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-cyan);
+    backdrop-filter: blur(3px);
+    transition: all 0.2s ease;
+}
+#time-progress-button:hover,
+#time-progress-button:focus-visible {
+    background-color: var(--accent-cyan-bg-hover);
+    transform: scale(1.05);
+}
+#time-progress-button svg {
+    width: 24px;
+    height: 24px;
+}
+[data-theme="flip-clock"] #time-progress-button {
+    background-color: rgba(30, 30, 30, 0.8);
+}
+
+.comparison-section {
+    margin-bottom: 25px;
+}
+.comparison-section:last-child {
+    margin-bottom: 10px;
+}
+.comparison-section h4 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1em;
+    color: var(--accent-purple);
+    margin-bottom: 10px;
+    font-weight: 600;
+}
+.comparison-bar-container {
+    width: 100%;
+    background-color: var(--progress-bar-bg);
+    border-radius: 20px;
+    height: 24px;
+    overflow: hidden;
+    border: 1px solid var(--progress-bar-border);
+}
+.comparison-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 20px;
+    transition: width 0.5s ease-out, background-color 0.5s ease-out;
+}
+.comparison-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9em;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+[data-theme="flip-clock"] .comparison-section h4 {
+    font-family: 'Poppins', sans-serif;
+}
+
+
 /* Utility Classes */
 .hidden { display: none !important; }
 .sr-only {
@@ -2557,7 +2628,8 @@ main#tab-content > section.hidden {
 [data-theme="power-safe"] .close-button:hover,
 [data-theme="power-safe"] .close-button:focus-visible,
 [data-theme="power-safe"] .appearance-arrow,
-#appearance-menu-item-container.open [data-theme="power-safe"] .appearance-arrow {
+#appearance-menu-item-container.open [data-theme="power-safe"] .appearance-arrow,
+[data-theme="power-safe"] #time-progress-button:hover {
     transform: none !important;
 }
 
