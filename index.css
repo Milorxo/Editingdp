@@ -2570,6 +2570,19 @@ main#tab-content > section.hidden {
     color: var(--text-secondary);
     margin-top: 8px;
 }
+.money-stat {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: var(--accent-success);
+    text-shadow: var(--glow-success);
+    margin-top: 8px;
+    text-align: right; /* Align with right-aligned stats above */
+}
+
+[data-theme="flip-clock"] .money-stat,
+[data-theme="power-safe"] .money-stat {
+    text-shadow: none;
+}
 [data-theme="flip-clock"] .comparison-bar-fill,
 [data-theme="power-safe"] .comparison-bar-fill {
     background-image: none;
