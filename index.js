@@ -1809,26 +1809,37 @@ function switchTab(categoryIdToActivate) {
 
 function switchView(viewId) {
     currentActiveViewId = viewId;
-    
-    const isMainView = viewId === 'main' || viewId === 'activity-dashboard';
-    
-    domElements.appViewWrapper.classList.toggle('hidden', !isMainView);
-    domElements.progressManagementView.classList.toggle('hidden', viewId !== 'progress-management');
-    domElements.scheduledTasksView.classList.toggle('hidden', viewId !== 'scheduled-tasks');
-    
-    domElements.dashboardColumn.classList.toggle('hidden', viewId !== 'activity-dashboard');
 
+    const isMainDisplay = viewId === 'main';
+    const isActivityDashboard = viewId === 'activity-dashboard';
+    const isProgressManagement = viewId === 'progress-management';
+    const isScheduledTasks = viewId === 'scheduled-tasks';
+
+    // Toggle visibility of the main view containers
+    const isAppViewContainerActive = isMainDisplay || isActivityDashboard;
+    domElements.appViewWrapper.classList.toggle('hidden', !isAppViewContainerActive);
+    domElements.progressManagementView.classList.toggle('hidden', !isProgressManagement);
+    domElements.scheduledTasksView.classList.toggle('hidden', !isScheduledTasks);
+
+    // If the main app container is active, decide which panel to show inside it.
+    if (isAppViewContainerActive) {
+        domElements.mainContentWrapper.classList.toggle('hidden', !isMainDisplay);
+        domElements.dashboardColumn.classList.toggle('hidden', !isActivityDashboard);
+    }
+
+    // Update active menu item in side panel
     document.querySelectorAll('.side-panel-item').forEach(item => item.classList.remove('active-menu-item'));
     const activeMenuItem = document.getElementById(`menu-${viewId}`);
     if (activeMenuItem) {
         activeMenuItem.classList.add('active-menu-item');
     }
 
-    if (viewId === 'progress-management') {
+    // Call data update functions for the newly active view
+    if (isProgressManagement) {
         renderProgressManagementList();
-    } else if (viewId === 'scheduled-tasks') {
+    } else if (isScheduledTasks) {
         renderScheduledTasksManagementList();
-    } else if (viewId === 'activity-dashboard') {
+    } else if (isActivityDashboard) {
         updateDashboardSummaries();
     }
 
