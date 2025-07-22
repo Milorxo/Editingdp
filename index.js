@@ -2180,13 +2180,8 @@ function renderCalendar() {
                 fill.className = 'calendar-day-fill';
                 fill.style.height = `${percentage}%`;
                 
-                if(currentTheme === 'original') {
-                     const hue = (percentage / 100) * 120;
-                     fill.style.backgroundColor = `hsla(${hue}, 75%, 50%, 0.6)`;
-                } else {
-                     fill.style.backgroundColor = `var(--text-primary)`;
-                     fill.style.opacity = percentage / 100;
-                }
+                const hue = (percentage / 100) * 120; // 0 = red, 120 = green
+                fill.style.backgroundColor = `hsla(${hue}, 75%, 50%, 0.6)`;
                 
                 if (percentage > 75) {
                     cell.classList.add('high-fill');
@@ -2794,8 +2789,8 @@ function setTheme(themeName, shouldSave = true) {
 function renderThemeOptions() {
     const themes = [
         { id: 'original', name: 'Original' },
-        { id: 'flip-clock', name: 'Flip Clock (Low Motion)' },
-        { id: 'power-safe', name: 'Power Safe (No Animation)' }
+        { id: 'power-safe', name: 'Power Safe (No Animation)' },
+        { id: 'flip-clock', name: 'Flip Clock (Low Motion)' }
     ];
     
     domElements.themeDropdownContainer.innerHTML = '';
