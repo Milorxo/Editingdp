@@ -2531,11 +2531,10 @@ main#tab-content > section.hidden {
     aspect-ratio: 1;
     font-size: 0.9em;
     border-radius: 6px;
-    justify-content: center;
+    justify-content: flex-start;
+    padding-top: 4px;
 }
 #progress-history-calendar-view .calendar-day-cell .calendar-day-fill {
-    height: 100%;
-    opacity: 0.3;
     border-radius: 6px;
 }
 #progress-history-calendar-view .calendar-day-cell.selected {
@@ -2839,19 +2838,4 @@ main#tab-content > section.hidden {
 [data-theme="flip-clock"] .progress-bar-container {
     border-radius: 8px;
 }
-[data-theme="flip-clock"] .progress-bar-fill {
-    border-radius: 8px;
-}
-[data-theme="flip-clock"] .modal-button, 
-[data-theme="flip-clock"] .modal-button-primary,
-[data-theme="flip-clock"] #save-note-button {
-    border-radius: 8px;
-}
-[data-theme="flip-clock"] .confirm-delete-task-button {
-    background-color: var(--accent-red);
-    color: var(--bg-color);
-}
-[data-theme="flip-clock"] .confirm-delete-task-button:hover,
-[data-theme="flip-clock"] .confirm-delete-task-button:focus-visible {
-    background-color: var(--accent-red-light);
-}
+[data-t
