@@ -3208,40 +3208,65 @@ function closeTimeProgressModal() {
 }
 
 function updateTimeProgress() {
+    const totalProductiveSeconds = 16 * 60 * 60; // 57,600 seconds in 16 hours
+
+    // --- 1. Time Remaining Logic ---
     const now = new Date();
-    const start = new Date(now);
-    start.setHours(5, 30, 0, 0); // 5:30 AM
-    const end = new Date(now);
-    end.setHours(21, 30, 0, 0); // 9:30 PM
+    const startTime = new Date(now);
+    startTime.setHours(5, 30, 0, 0); // 5:30 AM
+    const endTime = new Date(now);
+    endTime.setHours(21, 30, 0, 0); // 9:30 PM
 
-    const totalSeconds = (end.getTime() - start.getTime()) / 1000;
-    const elapsedSeconds = Math.max(0, (now.getTime() - start.getTime()) / 1000);
-    const timePercentage = Math.min(100, (elapsedSeconds / totalSeconds) * 100);
-
+    let remainingSecondsToday;
+    if (now.getTime() < startTime.getTime()) {
+        remainingSecondsToday = totalProductiveSeconds;
+    } else if (now.getTime() > endTime.getTime()) {
+        remainingSecondsToday = 0;
+    } else {
+        remainingSecondsToday = (endTime.getTime() - now.getTime()) / 1000;
+    }
+    remainingSecondsToday = Math.max(0, Math.round(remainingSecondsToday));
+    
+    const elapsedSeconds = totalProductiveSeconds - remainingSecondsToday;
+    const timePercentage = totalProductiveSeconds > 0 ? (elapsedSeconds / totalProductiveSeconds) * 100 : 0;
+    
+    // Update UI for Time
     domElements.timeProgressBar.style.width = `${timePercentage}%`;
     domElements.timeProgressPercentage.textContent = `${timePercentage.toFixed(1)}% of time used`;
-    
-    const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
-    const hours = Math.floor(remainingSeconds / 3600);
-    const minutes = Math.floor((remainingSeconds % 3600) / 60);
+
+    const hours = Math.floor(remainingSecondsToday / 3600);
+    const minutes = Math.floor((remainingSecondsToday % 3600) / 60);
     domElements.timeProgressRemaining.textContent = `${hours}h ${minutes}m remaining`;
     
-    const dailyTracker = progressTrackers.find(t => t.type === 'daily');
-    const dailyTarget = dailyTracker ? dailyTracker.targetPoints : 2700;
-    const progress = calculateProgressForDate(getTodayDateString(), true, dailyTarget);
-
-    domElements.modalTaskProgressBar.style.width = `${progress.percentage}%`;
-    domElements.modalTaskProgressStats.textContent = `${progress.pointsEarned} / ${dailyTarget} Points (${progress.percentage}%)`;
-    
+    // This is the "Money Seconds" countdown, representing remaining seconds.
+    animateNumber(domElements.timeAsMoney, remainingSecondsToday);
     applyProgressStyles(domElements.timeProgressBar, timePercentage);
-    applyProgressStyles(domElements.modalTaskProgressBar, progress.percentage);
-    
-    const hourlyRate = 125;
-    const timeValue = (elapsedSeconds / 3600) * hourlyRate;
-    const progressValue = (progress.pointsEarned / dailyTarget) * (totalSeconds / 3600) * hourlyRate;
 
-    animateNumber(domElements.timeAsMoney, Math.round(timeValue));
-    animateNumber(domElements.progressAsMoney, Math.round(progressValue));
+    // --- 2. Today's Task Progress Logic ---
+    const dailyTracker = progressTrackers.find(t => t.type === 'daily');
+    const dailyTargetPoints = dailyTracker ? dailyTracker.targetPoints : 2700;
+    
+    // Get progress in points
+    const progress = calculateProgressForDate(getTodayDateString(), true, dailyTargetPoints);
+
+    // Convert points to "earned seconds", capped at the maximum
+    const secondsPerPoint = dailyTargetPoints > 0 ? totalProductiveSeconds / dailyTargetPoints : 0;
+    let earnedSecondsFromTasks = Math.min(
+        progress.pointsEarned * secondsPerPoint,
+        totalProductiveSeconds
+    );
+    earnedSecondsFromTasks = Math.round(earnedSecondsFromTasks);
+
+    // Update UI for Tasks
+    // The visual width of the bar should reflect the percentage of points achieved.
+    domElements.modalTaskProgressBar.style.width = `${progress.percentage}%`;
+    // The main stat text remains in points for user clarity.
+    domElements.modalTaskProgressStats.textContent = `${progress.pointsEarned} / ${dailyTargetPoints} Points (${progress.percentage}%)`;
+    
+    // This is the "Task Progress" represented as earned seconds/dollars.
+    animateNumber(domElements.progressAsMoney, earnedSecondsFromTasks);
+    // The color of the bar is also based on the percentage of points achieved.
+    applyProgressStyles(domElements.modalTaskProgressBar, progress.percentage);
 }
 
 
