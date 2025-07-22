@@ -1512,8 +1512,6 @@ main#tab-content > section.hidden {
 .item-actions .icon-button {
     padding: 4px;
 }
-.item-actions .icon-button.item-rename { color: var(--accent-cyan); }
-.item-actions .icon-button.item-delete { color: var(--accent-red); }
 
 /* View Mode: Medium (Default) */
 .view-mode-medium {
@@ -1597,10 +1595,7 @@ main#tab-content > section.hidden {
     padding: 0;
     margin-left: 10px;
 }
-.view-mode-detail .item .item-rename,
-.view-mode-detail .item .item-delete {
-    display: none;
-}
+
 .item-more-options {
     color: var(--text-secondary);
 }
@@ -1886,6 +1881,81 @@ main#tab-content > section.hidden {
     color: var(--text-muted);
     cursor: not-allowed;
     background-color: transparent;
+}
+
+
+/* NEW: Redesigned Item Context Menu */
+#item-context-menu {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    min-width: auto;
+    animation: scaleIn 0.15s ease-out;
+}
+#item-context-menu button {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#item-context-menu button svg {
+    width: 20px;
+    height: 20px;
+    color: var(--text-primary);
+}
+#item-context-menu button:hover,
+#item-context-menu button:focus-visible {
+    background-color: var(--accent-purple-bg-subtle);
+}
+#item-context-menu button:hover svg {
+    color: var(--text-light);
+}
+
+#ctx-switch-item-type-container {
+    display: flex;
+    align-items: center;
+    padding: 0 4px;
+}
+
+.toggle-switch {
+    position: relative;
+    width: 44px;
+    height: 24px;
+    border-radius: 12px;
+    cursor: pointer;
+    background-color: var(--accent-purple);
+    transition: background-color 0.3s ease-in-out;
+    outline: none;
+}
+.toggle-switch:focus-visible {
+    box-shadow: 0 0 0 2px var(--panel-bg-darker), 0 0 0 4px var(--accent-purple-light);
+}
+
+.toggle-switch.is-on {
+    background-color: var(--accent-cyan);
+}
+.toggle-switch.is-on:focus-visible {
+    box-shadow: 0 0 0 2px var(--panel-bg-darker), 0 0 0 4px var(--accent-cyan-light);
+}
+
+.toggle-switch-handle {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    background-color: white;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.toggle-switch.is-on .toggle-switch-handle {
+    transform: translateX(20px);
 }
 
 
