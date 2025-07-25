@@ -9,13 +9,13 @@
   "icons": [
     {
       "src": "pd.png",
-      "type": "image/png",
+      "type": "image/x-icon",
       "sizes": "512x512",
       "purpose": "any maskable"
     },
     {
-      "src": "pd_192.png",
-      "type": "image/png",
+      "src": "pd.png",
+      "type": "image/x-icon",
       "sizes": "192x192",
       "purpose": "any maskable"
     }
