@@ -49,6 +49,8 @@ const SCHEDULED_TASK_COLORS = [
     { id: 'yellow', 'value': '#FFD54F' }
 ];
 
+const TOTAL_PRODUCTIVE_SECONDS = 16 * 60 * 60; // 57,600 seconds in 16 hours
+
 let currentCategories = []; 
 let appContent = {}; // Main data structure for all items (folders, notes, tasks)
 let progressTrackers = [];
@@ -139,7 +141,8 @@ const domElements = {
   historyModalCloseButton: null,
   historyModalDate: null,
   historyModalPointsValue: null,        
-  historyModalPointsTotal: null,       
+  historyModalPointsTotal: null,
+  historyMoneyEarnedStat: null,
   historyPercentageProgressFill: null, 
   historyTasksList: null,
   expandTasksButton: null,
@@ -427,6 +430,9 @@ function updateTodaysHistoryEntry() {
 
     const note = localStorage.getItem(STORAGE_KEY_DAILY_NOTE_PREFIX + today) || "";
 
+    const secondsPerPoint = dailyTarget > 0 ? TOTAL_PRODUCTIVE_SECONDS / dailyTarget : 0;
+    const moneyEarned = Math.round(progressStandardOnly.pointsEarned * secondsPerPoint);
+
     const historyEntry = {
         date: today,
         completedTaskStructure: completedTasksTodayStruct,
@@ -434,7 +440,8 @@ function updateTodaysHistoryEntry() {
         pointsEarned: progressStandardOnly.pointsEarned,
         percentageCompleted: progressStandardOnly.percentage,
         totalTasksOnDate: progressStandardOnly.totalStandardTasks,
-        dailyTargetPoints: dailyTarget
+        dailyTargetPoints: dailyTarget,
+        moneyEarned: moneyEarned
     };
 
     localStorage.setItem(historyKey, JSON.stringify(historyEntry));
@@ -837,6 +844,9 @@ function saveDayToHistory(dateToSave) {
 
     const mainReflection = localStorage.getItem(STORAGE_KEY_DAILY_NOTE_PREFIX + dateToSave) || "";
     
+    const secondsPerPoint = dailyTarget > 0 ? TOTAL_PRODUCTIVE_SECONDS / dailyTarget : 0;
+    const moneyEarned = Math.round(pointsEarned * secondsPerPoint);
+
     const historyEntry = {
         date: dateToSave,
         completedTaskStructure: completedTasksHistory,
@@ -844,7 +854,8 @@ function saveDayToHistory(dateToSave) {
         pointsEarned: pointsEarned,
         percentageCompleted: percentage,
         totalTasksOnDate: totalStandardTasks,
-        dailyTargetPoints: dailyTarget
+        dailyTargetPoints: dailyTarget,
+        moneyEarned: moneyEarned
     };
 
     localStorage.setItem(historyKey, JSON.stringify(historyEntry));
@@ -2236,18 +2247,31 @@ function showHistoryForDate(dateString) {
             pointsEarned: 0,
             percentageCompleted: 0,
             dailyTargetPoints: progressTrackers.find(t => t.type === 'daily')?.targetPoints || 2700,
+            moneyEarned: 0,
         };
         renderHistoryModal(blankHistory, isToday);
     }
 }
 
 function renderHistoryModal(historyData, isEditable) {
-    const { date, completedTaskStructure, userNote, pointsEarned, percentageCompleted, dailyTargetPoints } = historyData;
+    const { date, completedTaskStructure, userNote, pointsEarned, percentageCompleted, dailyTargetPoints, moneyEarned } = historyData;
     domElements.historyModal.classList.remove('hidden');
     domElements.historyModal.classList.add('opening');
     domElements.historyModalDate.textContent = new Date(date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     domElements.historyModalPointsValue.textContent = pointsEarned || 0;
     domElements.historyModalPointsTotal.textContent = dailyTargetPoints || 2700;
+    
+    if (domElements.historyMoneyEarnedStat) {
+        if (moneyEarned !== undefined && moneyEarned !== null) {
+            domElements.historyMoneyEarnedStat.textContent = `Money Earned: $${(moneyEarned || 0).toLocaleString('en-US')}`;
+            domElements.historyMoneyEarnedStat.style.color = 'var(--accent-success)';
+            domElements.historyMoneyEarnedStat.style.textShadow = 'var(--glow-success)';
+            domElements.historyMoneyEarnedStat.classList.remove('hidden');
+        } else {
+            domElements.historyMoneyEarnedStat.classList.add('hidden');
+        }
+    }
+
     const percentage = percentageCompleted || 0;
     domElements.historyPercentageProgressFill.style.width = `${percentage}%`;
     domElements.historyPercentageProgressFill.textContent = `${percentage}%`;
@@ -3203,8 +3227,6 @@ function closeTimeProgressModal() {
 }
 
 function updateTimeProgress() {
-    const totalProductiveSeconds = 16 * 60 * 60; // 57,600 seconds in 16 hours
-
     // --- 1. Time Remaining Logic ---
     const now = new Date();
     const startTime = new Date(now);
@@ -3214,7 +3236,7 @@ function updateTimeProgress() {
 
     let remainingSecondsToday;
     if (now.getTime() < startTime.getTime()) {
-        remainingSecondsToday = totalProductiveSeconds;
+        remainingSecondsToday = TOTAL_PRODUCTIVE_SECONDS;
     } else if (now.getTime() > endTime.getTime()) {
         remainingSecondsToday = 0;
     } else {
@@ -3222,8 +3244,8 @@ function updateTimeProgress() {
     }
     remainingSecondsToday = Math.max(0, Math.round(remainingSecondsToday));
     
-    const elapsedSeconds = totalProductiveSeconds - remainingSecondsToday;
-    const timePercentage = totalProductiveSeconds > 0 ? (elapsedSeconds / totalProductiveSeconds) * 100 : 0;
+    const elapsedSeconds = TOTAL_PRODUCTIVE_SECONDS - remainingSecondsToday;
+    const timePercentage = TOTAL_PRODUCTIVE_SECONDS > 0 ? (elapsedSeconds / TOTAL_PRODUCTIVE_SECONDS) * 100 : 0;
     
     // Update UI for Time
     domElements.timeProgressBar.style.width = `${timePercentage}%`;
@@ -3245,10 +3267,10 @@ function updateTimeProgress() {
     const progress = calculateProgressForDate(getTodayDateString(), true, dailyTargetPoints);
 
     // Convert points to "earned seconds", capped at the maximum
-    const secondsPerPoint = dailyTargetPoints > 0 ? totalProductiveSeconds / dailyTargetPoints : 0;
+    const secondsPerPoint = dailyTargetPoints > 0 ? TOTAL_PRODUCTIVE_SECONDS / dailyTargetPoints : 0;
     let earnedSecondsFromTasks = Math.min(
         progress.pointsEarned * secondsPerPoint,
-        totalProductiveSeconds
+        TOTAL_PRODUCTIVE_SECONDS
     );
     earnedSecondsFromTasks = Math.round(earnedSecondsFromTasks);
 
