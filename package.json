@@ -1,0 +1,16 @@
+{
+  "name": "daily_productivity",
+  "productName": "Daily Productivity",
+  "version": "1.0.0",
+  "description": "This will improve my life for better",
+  "main": "main.js", 
+  "scripts": {
+    "start": "electron ."
+  },
+  "keywords": [],
+  "author": "Milorxo",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^26.0.0"
+  }
+}
