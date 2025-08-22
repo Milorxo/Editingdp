@@ -9,8 +9,6 @@ function createWindow() {
     height: 800,
     icon: __dirname + 'pd.ico',  // path to your icon
     title: "Daily Productivity"
-    frame: true,
-    autoHideMenuBar: true
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
@@ -18,8 +16,6 @@ function createWindow() {
   });
 // Remove the menu bar completely
 mainWindow.setMenuBarVisibility(false);
-
-mainWindow.loadFile('index.html');
   // Load your web app (local index.html)
   win.loadFile(path.join(__dirname, 'index.html'));
 
